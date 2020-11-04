@@ -1,0 +1,9 @@
+[package]
+name = "slideshow"
+version = "0.1.0"
+authors = ["Xpost2000 <xpost2000cod@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
