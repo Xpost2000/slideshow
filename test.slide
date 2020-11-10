@@ -1,5 +1,5 @@
 # Slide Format
-$font "Inconsolata-Regular.ttf" 
+$font:"data/fonts/inconsolata/Inconsolata Regular.ttf" 
 
 $page
 $background_color:#FF0000FF
@@ -8,14 +8,15 @@ This is a test slide, here's some text.
 This should be part of a paragraph and it should look correct.
 Yes?
 
-$(color:#FFFF00FF)
+$color:#FFFF00FF
 There should be the equivalent of a line break above.
 $end_page
 
 $page
-$(background_color:#00FF00FF reset)
+$background_color:#00FF00FF
+$reset
 Hi humang?
-$(color:#0000FFFF)
+$color:#0000FFFF
 This should work
 $end_page
 
