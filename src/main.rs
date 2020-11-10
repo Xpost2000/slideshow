@@ -59,6 +59,50 @@ fn get_markup_info(input: &str) -> MarkupInformation {
     info
 }
 
+#[derive(Debug)]
+struct TextElement {
+    x: f32, y: f32, // What units should this be?
+    text: String, // In the case I allow variables or something...
+}
+#[derive(Debug)]
+struct Page {
+    /*
+    A Page is probably just going to consist of "elements"
+    
+    Like a TextElement
+    and ImageElement
+    and ShapeElement
+    or whatever primitives I want to add...
+     */
+    text_elements: Vec<TextElement>,
+}
+
+impl Default for Page {
+    fn default() -> Page {
+        Page {
+            text_elements: Vec::new()
+        }
+    }
+}
+
+type Slide = Vec<Page>;
+// statemachine thing?
+struct SlideSettingsContext {
+}
+
+impl Default for SlideSettingsContext {
+    fn default() -> SlideSettingsContext {
+        SlideSettingsContext{}
+    }
+}
+
+#[derive(Debug)]
+// tokenized commands.
+struct SlideLineCommand <'a> {
+    name: &'a str,
+    args: Vec<&'a str>,
+}
+
 /*
 I kind of want the slideshow to be a state machine API.
 Kind of in the same way OpenGL is I guess.
@@ -73,102 +117,204 @@ The actual slide I guess can be compiled ahead of time.
 I should probably do slide livereloading cause it's cool and also cause slides
 are pretty visual and would probably be best with feedback
  */
-enum Command {
-}
-
 #[derive(Debug)]
-struct Page {
-    /*
-    A Page is probably just going to consist of "elements"
-    
-    Like a TextElement
-    and ImageElement
-    and ShapeElement
-    or whatever primitives I want to add...
-     */
+struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
 }
+impl Color {
+    fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
+        Color {r, g, b, a}
+    }
 
-type Slide = Vec<Page>;
-struct SlideSettingsContext {
-    // statemachine thing?
-}
-
-impl Default for SlideSettingsContext {
-    fn default() -> SlideSettingsContext {
-        SlideSettingsContext{}
+    fn parse_hexadecimal_literal(hex: &str) -> Color {
+        Color::new(0, 0, 0, 0)
     }
 }
 
-impl SlideSettingsContext {
-    
+#[derive(Debug)]
+enum Command <'a> {
+    Reset,
+    SetFont(&'a str),
+    SetBackgroundColor(Color),
+    SetColor(Color),
 }
 
-#[derive(Debug)]
-enum SlideLineCommand <'a> {
-    Command(&'a str),
-    CompoundCommand(Vec<&'a str>),
+/*
+    I need to write a proper tokenizer. Instead of this
+*/
+fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
+    /*Since I still lex by char, I really only need to support string literals...*/
+    let mut tokenized_first_pass : Vec<&str> = Vec::new();
+    let mut char_iterator = line.chars().enumerate();
+
+    fn special_character_predicate(character: char) -> bool {
+        match character {
+            '$' | ':' | '\"' | ' ' | '\t' | '\n' | '\r' => true,
+            _ => false
+        }
+    }
+    fn special_character(character: char) -> Option<char> {
+        if special_character_predicate(character) {
+            Some(character)
+        } else { None }
+    }
+
+    // holy hell this is warty... Someone please teach me how to do this better...
+    if let Some((_, character)) = char_iterator.next() {
+        if character == '$' {
+            while let Some((index, character)) = char_iterator.next() {
+                match special_character(character) {
+                    Some(character) => {
+                        match character {
+                            '$' => { panic!("error?"); },
+                            '\"' => {
+                                let start = index+1;
+                                let end : Option<usize> = line[start..].find('\"');
+                                if let Some(end) = end {
+                                    let string_literal = &line[start..(start+end)];
+                                    tokenized_first_pass.push(string_literal);
+                                    for _ in 0..end { char_iterator.next(); }
+                                }
+                            },
+                            _ => {
+                            }
+                        }
+                    },
+                    None => {
+                        let start = index;
+                        let end : Option<usize> =
+                            loop {
+                                if let Some((index, character)) = char_iterator.next() {
+                                    match character {
+                                        '\"' | ' ' | ':' | '\n' => {
+                                            break Some(index);
+                                        }
+                                        _ => {}
+                                    }
+                                } else {
+                                    break Some(line.len());
+                                }
+                            };
+                        if let Some(end) = end { 
+                            let token_value = &line[start..end];
+                            tokenized_first_pass.push(token_value);
+                            if let Some(':') = line.chars().nth(end) {
+                                tokenized_first_pass.push(":");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut commands : Vec<SlideLineCommand> = Vec::new();
+
+    /*TODO: Rust lexers are really painful with iterators... Oh god.*/
+    /*No support for compound commands yet.*/
+    if tokenized_first_pass.len() >= 1 {
+        let mut token_iterator = tokenized_first_pass.iter();
+
+        while let Some(token) = token_iterator.next() {
+            match token {
+                _ => {
+                    let name = token;
+                    let mut args : Vec<&str> = Vec::new();
+                    while let Some(token) = &token_iterator.next() {
+                        match **token {
+                            ":" => {
+                                if let Some(token) = &token_iterator.next() {
+                                    args.push(token);
+                                }
+                            },
+                            _ => { break; },
+                        }
+                    }
+                    commands.push(SlideLineCommand{ name, args});
+                }
+            }
+        }
+    }
+
+    // println!("commands {:?}", commands);
+
+    if commands.len() >= 1 {
+        Some(commands)
+    } else {
+        None
+    }
 }
 
 // Tokenizes a command into a real command.
-fn parse_single_command(line : &str) -> Option<Command> {
-    None
+fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>> {
+    let mut args = command.args.iter();
+
+    match command.name {
+        "color" | "background_color" => {
+            if let Some(next) = &args.next() {
+                let color = Color::parse_hexadecimal_literal(next);
+                Some(if command.name == "color" { Command::SetColor(color) }
+                     else { Command::SetBackgroundColor(color) })
+            } else {
+                None
+            }
+        },
+        "font" => {
+            if let Some(next) = &args.next() {
+                // println!("next: {}", next);
+                Some(Command::SetFont(next))
+            } else {
+                None
+            }
+        }
+        _ => { None },
+    }
 }
 
 fn execute_command(context: &mut SlideSettingsContext, command: Command) {
     match command {
-        _ => {}
+        _ => { println!("{:?} is an unknown command", command); }
     }
 }
 
 // This will call parse command and execute command
 fn handle_command(context: &mut SlideSettingsContext, command: SlideLineCommand) {
-    unimplemented!("Not done");
+    let command = parse_single_command(command);
+    if let Some(command) = command {
+        execute_command(context, command);
+    }
 }
 
 fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page {
-    let mut line_breaks : u32 = 0;
-    unimplemented!("Not done");
+    let mut line_breaks : u32 = 0; // used for calculating relative y.
+    let mut new_page : Page = Page::default();
+
+    println!("lines: {:?}", page_lines);
+    for line in page_lines {
+        if let Some(commands) = parse_slide_command(&line) {
+            for command in commands {
+                handle_command(context, command);
+            }
+        } else {
+            if line.len() >= 1 {
+                println!("plain text: {}", line);
+                new_page.text_elements.push(TextElement{x: 0.0, y: 0.0, text: String::from(line)});
+            } else {
+                println!("line break!");
+                line_breaks += 1;
+            }
+        }
+    }
+
+    new_page
 }
 
 fn compile_slide(slide_source : &String) -> Slide {
     let mut slide = Slide::new();
     let mut current_context = SlideSettingsContext::default();
-    // I need a better way to get errors...
-    fn parse_slide_command(line : &str) -> Option<SlideLineCommand> {
-        let mut split_line : Vec<&str> = Vec::new();
-        if line.chars().nth(0) == Some('$') {
-            let next_character = line.chars().nth(1);
-            if next_character == Some('$') {
-                // I don't properly handle escaping $$... Whoops!
-                None
-            } else if next_character == None {
-                None
-            } else {
-                if next_character == Some('(') {
-                    let last_index = line.chars().count()-1;
-                    let last_character = line.chars().nth(last_index);
-                    if last_character == Some(')') {
-                        split_line = line[2..last_index].split(" ").collect();
-                    } else {
-                        println!("Compound command not ended?");
-                    }
-                } else {
-                    split_line = line[1..].split(" ").collect();
-                }
-
-                if split_line.len() > 1 {
-                    Some(SlideLineCommand::CompoundCommand(split_line))
-                } else if split_line.len() == 1 {
-                    Some(SlideLineCommand::Command(split_line[0]))
-                } else {
-                    None
-                }
-            }
-        } else {
-            None
-        }
-    }
-
     // The compiler "state" is "global" but I should probably reject
     // any text that isn't inside a currently compiled page...
     // text outside of slides should be a warning though and should probably
@@ -176,16 +322,14 @@ fn compile_slide(slide_source : &String) -> Slide {
     let mut line_iterator = slide_source.lines().enumerate();
     while let Some((index, line)) = line_iterator.next() {
         match parse_slide_command(&line) {
-            Some(command) => {
-                if let SlideLineCommand::Command("page") = command {
-                    println!("Page directive!");
+            Some(commands) => {
+                if commands[0].name == "page" {
                     let end_page_index = loop {
                         let next = line_iterator.next();
                         match next {
                             Some((index, line)) => {
-                                if let Some(command) = parse_slide_command(&line) {
-                                    if let SlideLineCommand::Command("end_page") = command {
-                                        println!("Found end page!");
+                                if let Some(commands) = parse_slide_command(&line) {
+                                    if commands[0].name == "end_page" {
                                         break Some(index);
                                     }
                                 }
@@ -199,15 +343,16 @@ fn compile_slide(slide_source : &String) -> Slide {
                     if let Some(end_page_index) = end_page_index {
                         let index = index+1;
                         let end_page_index = end_page_index;
-                        let page_source_lines : Vec<&str> = slide_source.lines().enumerate().map(|pair| pair.1).collect();
-                        let new_page = parse_page(&mut current_context, page_source_lines);
-                        println!("{:#?}", new_page);
+                        let page_source_lines : Vec<&str> = slide_source.lines().collect();
+                        let new_page = parse_page(&mut current_context, page_source_lines[index..end_page_index].to_vec());
                         slide.push(new_page);
                     } else {
                         println!("Error! EOF before an end page!");
                     }
                 } else {
-                    handle_command(&mut current_context, command);
+                    for command in commands {
+                        handle_command(&mut current_context, command);
+                    }
                 }
             },
             None => {
@@ -219,7 +364,6 @@ fn compile_slide(slide_source : &String) -> Slide {
         }
     }
 
-    // unimplemented!("not finished");
     slide
 }
 
@@ -237,6 +381,25 @@ fn remove_comments_from_source(source : &str) -> String {
     filtered
 }
 
+fn render_page(page: &Page) {
+    for text in &page.text_elements {
+        // TODO: Better markup stuff.
+        let markup = get_markup_info(&text.text);
+        for markup in markup {
+            match markup {
+                MarkupRange::Bold(start, end) => {
+                },
+                MarkupRange::Strikethrough(start, end) => {
+                },
+                MarkupRange::Italics(start, end) => {
+                },
+                MarkupRange::Underlined(start, end) => {
+                },
+            }
+        }
+    }
+}
+
 fn load_file(file_name: &str) -> String {
     use std::io::Read;
     use std::fs::File;
@@ -249,34 +412,12 @@ fn load_file(file_name: &str) -> String {
 }
 
 fn main() {
-    if false {
-        let test_string = "*bold* normal text +test crossed out+ this text is normal /this is italicized/";
-        let markup_info = get_markup_info(&test_string);
-        println!("{:?}", markup_info);
-        for region in markup_info.iter() {
-            match region {
-                MarkupRange::Bold(begin, end) =>
-                    println!("Bolded: {}", &test_string[*begin..*end]),
-                MarkupRange::Strikethrough(begin, end) =>
-                    println!("Strikethrough: {}", &test_string[*begin..*end]),
-                MarkupRange::Italics(begin, end) =>
-                    println!("Italics: {}", &test_string[*begin..*end]),
-                MarkupRange::Underlined(begin, end) =>
-                    println!("Underlined: {}", &test_string[*begin..*end]),
-            }
-        }
-        println!("Trying to filter strings");
-        let test_string = "# Comment will be not parsed!\n$page\n#Yes? Cool!\n$background_color #FF0000FF (test:\"abc\")\nThis is some text with attributes applied\n\nThere should be one line break\nNo line break!";
-        let test_string = remove_comments_from_source(test_string);
-        // I know it's redundant, but remove_comments_from_source should not turn into lines...
-        // It just happened that reducing it to lines first was way easier.
-        for line in test_string.lines() {
-            println!("{}", line);
-        }
-    }
-
     let slideshow_source = load_file("test.slide");
     let slideshow_source = remove_comments_from_source(&slideshow_source);
     let slideshow = compile_slide(&slideshow_source);
+    println!("SLIDE:\n{:#?}", slideshow);
+    for page in slideshow {
+        render_page(&page);
+    }
     // render_present_slide(&slideshow);
 }
