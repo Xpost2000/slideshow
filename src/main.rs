@@ -1,62 +1,157 @@
 /*
     beginnings of a slideshow program?
+
+TODO: Please rewrite the tokenizer.
 */
 #[derive(Debug)]
-enum MarkupRange {
-    Bold(usize, usize),
-    Strikethrough(usize, usize),
-    Italics(usize, usize),
-    Underlined(usize, usize),
+/*
+I know there's a way to do it with just &str and slices, but
+the iteration work! OMG it's so much.
+*/
+enum Markup {
+    Plain(String),
+    Bold(String),
+    Strikethrough(String),
+    Italics(String),
+    Underlined(String),
 }
-impl MarkupRange {
-    // Should be Result...
-    // I probably shouldn't actually error out since this is likely just a warning.
-    fn try_parse_region(identifier: char, begin: usize, character_iterator: &mut std::iter::Enumerate<std::str::Chars>) -> Option<MarkupRange> {
-        let end : Result<Option<usize>, &'static str> = match identifier {
-            '*'|'_'|'+'|'/' => loop {
-                if let Some(item) = character_iterator.next() {
-                    if item.1 == identifier { break Ok(Some(item.0)); }
-                } else {
-                    break Err("EOF, could not find matching character!");
+
+// I had to lookup a basic lexer in Rust... Cause holy s**t whatever I was
+// doing was really confusing.
+struct MarkupLexer<'a> {
+    iterator: std::iter::Peekable<std::str::Chars<'a>>,
+}
+
+fn is_whitespace(c: char) -> bool {
+    c == ' ' || c == '\n' || c == '\t' || c == '\r'
+}
+
+/*
+   Real markup has multicharacter patterns, which
+   should still be fairly easy to adopt here...
+*/
+impl<'a> MarkupLexer<'a> {
+    // this is self consuming since the iterator
+    // will be used up. Probably debugging stuff.
+    fn stitch(self) -> String {
+        let mut result = String::new();
+        for item in self {
+            match item {
+                Markup::Plain(text_content) |
+                Markup::Bold(text_content) |
+                Markup::Strikethrough(text_content) |
+                Markup::Italics(text_content) |
+                Markup::Underlined(text_content) => {
+                    result.push_str(&text_content);
                 }
-            } ,
-            _ => Ok(None),
-        };
-        if let Ok(end) = end {
-            if let Some(end) = end {
-                match identifier {
-                    '*' => Some(MarkupRange::Bold(begin, end)),
-                    '+' => Some(MarkupRange::Strikethrough(begin, end)),
-                    '/' => Some(MarkupRange::Italics(begin, end)),
-                    '_' => Some(MarkupRange::Underlined(begin, end)),
-                    _ => None
+            }
+        }
+        result
+    }
+
+    fn is_special_character(c: char) -> bool {
+        match c {
+            '*' | '/' | '_' | '+' => true,
+            _ => false,
+        }
+    }
+    fn new(source: &'a str) -> MarkupLexer<'a> {
+        MarkupLexer {
+            iterator: source.chars().peekable()
+        }
+    }
+
+    fn peek_character(&mut self) -> Option<&char> {
+        self.iterator.peek()
+    }
+
+    fn next_character(&mut self) -> Option<char> {
+        self.iterator.next()
+    }
+
+    fn next_words_until_special(&mut self) -> String {
+        let mut sentence : String = String::new();
+        let mut previous_character : Option<char> = None;
+
+        while let Some(&character) = self.peek_character() {
+            if MarkupLexer::is_special_character(character) {
+                if let Some(&next_character) = self.peek_character() {
+                    if let Some(previous_character) = previous_character {
+                        if !is_whitespace(next_character) && is_whitespace(previous_character) {
+                            return sentence;
+                        }
+                    }
+                }
+            }
+            sentence.push(character);
+            previous_character = Some(character);
+            self.next_character().unwrap();
+        }
+        sentence
+    }
+
+    fn find_type(identifier: char, text_contents: String) -> Markup {
+        match identifier {
+            '*' => Markup::Bold(text_contents),
+            '+' => Markup::Strikethrough(text_contents),
+            '/' => Markup::Italics(text_contents),
+            '_' => Markup::Underlined(text_contents),
+            _ => Markup::Plain(text_contents),
+        }
+    }
+
+    fn find_match_and_pass(&mut self, to_match: char) -> (String, bool) {
+        let mut sentence : String = String::new();
+        let mut previous_character : Option<char> = None;
+
+        while let Some(&character) = self.peek_character() {
+            if character == to_match {
+                let good_match = 
+                    if let Some(previous_character) = previous_character {
+                        if !is_whitespace(previous_character) {true} else {false}
+                    } else {
+                        false
+                    };
+                self.next_character();
+                return (sentence, good_match);
+            }
+            sentence.push(character);
+            previous_character = Some(character);
+            self.next_character().unwrap();
+        }
+        (sentence, false)
+    }
+
+    fn next_markup_item(&mut self) -> Option<Markup> {
+        fn string_prepend(input: &String, c: char) -> String {
+            let mut result = String::new();
+            result.push(c);
+            result.push_str(input);
+            result
+        }
+
+        if let Some(&character) = self.peek_character() {
+            if MarkupLexer::is_special_character(character) {
+                self.next_character();
+                if let (text_within_boundaries, true) = self.find_match_and_pass(character) {
+                    Some(MarkupLexer::find_type(character, text_within_boundaries))
+                } else {
+                    Some(Markup::Plain(string_prepend(&self.next_words_until_special(), character)))
                 }
             } else {
-                None
+                Some(Markup::Plain(self.next_words_until_special()))
             }
         } else {
-            if let Err(error_message) = end {
-                println!("warning: {}", error_message);
-            }
             None
         }
     }
 }
-type MarkupInformation = Vec<MarkupRange>;
-fn get_markup_info(input: &str) -> MarkupInformation {
-    let mut info = MarkupInformation::new();
 
-    let mut character_iterator = input.chars().enumerate();
-
-    while let Some((index, character)) = character_iterator.next() {
-        if let Some(markup) = MarkupRange::try_parse_region(character,
-                                                            index+1,
-                                                            &mut character_iterator) {
-            info.push(markup);
-        }
+impl<'a> Iterator for MarkupLexer<'a> {
+    type Item = Markup;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_markup_item()
     }
-
-    info
 }
 
 #[derive(Debug)]
@@ -150,16 +245,11 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
     let mut tokenized_first_pass : Vec<&str> = Vec::new();
     let mut char_iterator = line.chars().enumerate();
 
-    fn special_character_predicate(character: char) -> bool {
-        match character {
-            '$' | ':' | '\"' | ' ' | '\t' | '\n' | '\r' => true,
-            _ => false
-        }
-    }
     fn special_character(character: char) -> Option<char> {
-        if special_character_predicate(character) {
-            Some(character)
-        } else { None }
+        match character {
+            '$' | ':' | '\"' | ' ' | '\t' | '\n' | '\r' => Some(character),
+            _ => None
+        }
     }
 
     // holy hell this is warty... Someone please teach me how to do this better...
@@ -213,6 +303,8 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
 
     let mut commands : Vec<SlideLineCommand> = Vec::new();
 
+    // No, actually it's just cause I want to write discount C, and
+    // Rust is making me realize why it's not a good idea...
     /*TODO: Rust lexers are really painful with iterators... Oh god.*/
     /*No support for compound commands yet.*/
     if tokenized_first_pass.len() >= 1 {
@@ -383,20 +475,8 @@ fn remove_comments_from_source(source : &str) -> String {
 
 fn render_page(page: &Page) {
     for text in &page.text_elements {
-        // TODO: Better markup stuff.
-        let markup = get_markup_info(&text.text);
-        for markup in markup {
-            match markup {
-                MarkupRange::Bold(start, end) => {
-                },
-                MarkupRange::Strikethrough(start, end) => {
-                },
-                MarkupRange::Italics(start, end) => {
-                },
-                MarkupRange::Underlined(start, end) => {
-                },
-            }
-        }
+        let mut cursor_x : f32 = 0.0;
+        let mut cursor_y : f32 = 0.0;
     }
 }
 
@@ -412,12 +492,24 @@ fn load_file(file_name: &str) -> String {
 }
 
 fn main() {
-    let slideshow_source = load_file("test.slide");
-    let slideshow_source = remove_comments_from_source(&slideshow_source);
-    let slideshow = compile_slide(&slideshow_source);
-    println!("SLIDE:\n{:#?}", slideshow);
-    for page in slideshow {
-        render_page(&page);
+    {
+        println!("Testing markup");
+        let source_test = "This is a *thing* Cool_right_ _sad _t t_";
+        let markup_lex = MarkupLexer::new(source_test);
+        for item in markup_lex {
+            println!("{:#?}", item);
+        }
+        let markup_lex = MarkupLexer::new(source_test);
+        println!("STITCHED TOGETHER STRING: {}", markup_lex.stitch());
+    }
+    if false {
+        let slideshow_source = load_file("test.slide");
+        let slideshow_source = remove_comments_from_source(&slideshow_source);
+        let slideshow = compile_slide(&slideshow_source);
+        println!("SLIDE:\n{:#?}", slideshow);
+        for page in slideshow {
+            render_page(&page);
+        }
     }
     // render_present_slide(&slideshow);
 }
