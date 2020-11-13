@@ -6,52 +6,6 @@ TODO: Please rewrite the tokenizer.
 mod markup;
 use self::markup::*;
 
-#[derive(Debug)]
-struct TextElement {
-    /*font?*/
-    x: f32,
-    y: f32,
-    text: String, // In the case I allow variables or something...
-}
-#[derive(Debug)]
-struct Page {
-    /*
-    A Page is probably just going to consist of "elements"
-    
-    Like a TextElement
-    and ImageElement
-    and ShapeElement
-    or whatever primitives I want to add...
-     */
-    text_elements: Vec<TextElement>,
-}
-
-impl Default for Page {
-    fn default() -> Page {
-        Page {
-            text_elements: Vec::new()
-        }
-    }
-}
-
-type Slide = Vec<Page>;
-// statemachine thing?
-struct SlideSettingsContext {
-}
-
-impl Default for SlideSettingsContext {
-    fn default() -> SlideSettingsContext {
-        SlideSettingsContext{}
-    }
-}
-
-#[derive(Debug)]
-// tokenized commands.
-struct SlideLineCommand <'a> {
-    name: &'a str,
-    args: Vec<&'a str>,
-}
-
 /*
 I kind of want the slideshow to be a state machine API.
 Kind of in the same way OpenGL is I guess.
@@ -66,22 +20,123 @@ The actual slide I guess can be compiled ahead of time.
 I should probably do slide livereloading cause it's cool and also cause slides
 are pretty visual and would probably be best with feedback
  */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Color {
     r: u8,
     g: u8,
     b: u8,
     a: u8,
 }
+
+fn hexadecimal_to_decimal(literal: &str) -> u8 {
+    let mut result : u8 = 0;
+    for (index, ch) in literal.chars().enumerate() {
+        let index = (literal.len()-1) - index;
+        result +=
+            match ch {
+                '0' => {0}, '1' => {1}, '2' => {2},
+                '3' => {3}, '4' => {4}, '5' => {5},
+                '6' => {6}, '7' => {7}, '8' => {8},
+                '9' => {9}, 'A' => {10}, 'B' => {11},
+                'C' => {12}, 'D' => {13}, 'E' => {14}, 'F' => {15},
+                _ => { panic!("undefined character for hexadecimal literal!"); }
+            } * 16_u8.pow(index as u32);
+    }
+    result
+}
+
 impl Color {
     fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
         Color {r, g, b, a}
     }
 
-    // TODO
-    fn parse_hexadecimal_literal(hex: &str) -> Color {
-        Color::new(0, 0, 0, 0)
+    fn parse_hexadecimal_literal(hex: &str) -> Option<Color> {
+        // TODO : This is not perfectly safe since it'll be fine up to
+        // 255... This needs to be templated.
+
+        if let Some('#') = hex.chars().nth(0) {
+            let hex = &hex[1..];
+            match hex.len() {
+                // FFFFFF
+                // FFFFFFFF
+                6 | 8 => {
+                    Some(Color::new(
+                        hexadecimal_to_decimal(&hex[0..2]),
+                        hexadecimal_to_decimal(&hex[2..4]),
+                        hexadecimal_to_decimal(&hex[4..6]),
+                        if hex.len() == 8 {
+                            hexadecimal_to_decimal(&hex[6..8])
+                        } else {
+                            255
+                        }
+                    ))
+                },
+                _ => {
+                    println!("Error parsing hexadecimal literal");
+                    None
+                }
+            }
+        } else {
+            None
+        }
     }
+}
+const COLOR_WHITE : Color = Color {r: 255, g: 255, b: 255, a: 255};
+const COLOR_BLACK : Color = Color {r: 0, g: 0, b: 0, a: 0};
+
+#[derive(Debug)]
+struct TextElement {
+    /*font?*/
+    x: f32,
+    y: f32,
+    text: String, // In the case I allow variables or something...
+}
+#[derive(Debug)]
+struct Page {
+    background_color: Color,
+    /*
+    A Page is probably just going to consist of "elements"
+    
+    Like a TextElement
+    and ImageElement
+    and ShapeElement
+    or whatever primitives I want to add...
+     */
+    text_elements: Vec<TextElement>,
+}
+
+impl Default for Page {
+    fn default() -> Page {
+        Page {
+            background_color: COLOR_WHITE,
+            text_elements: Vec::new()
+        }
+    }
+}
+
+type Slide = Vec<Page>;
+/*
+    stupid state machine
+*/
+struct SlideSettingsContext {
+    current_background_color: Color,
+    current_element_color: Color,
+}
+
+impl Default for SlideSettingsContext {
+    fn default() -> SlideSettingsContext {
+        SlideSettingsContext{
+            current_background_color: COLOR_WHITE,
+            current_element_color: COLOR_BLACK,
+        }
+    }
+}
+
+#[derive(Debug)]
+// tokenized commands.
+struct SlideLineCommand <'a> {
+    name: &'a str,
+    args: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -205,8 +260,12 @@ fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>
         "color" | "background_color" => {
             if let Some(next) = &args.next() {
                 let color = Color::parse_hexadecimal_literal(next);
-                Some(if command.name == "color" { Command::SetColor(color) }
-                     else { Command::SetBackgroundColor(color) })
+                if let Some(color) = color {
+                    Some(if command.name == "color" { Command::SetColor(color) }
+                         else { Command::SetBackgroundColor(color) })
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -226,6 +285,8 @@ fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>
 // TODO!
 fn execute_command(context: &mut SlideSettingsContext, command: Command) {
     match command {
+        Command::SetColor(color) => {context.current_element_color = color;},
+        Command::SetBackgroundColor(color) => {context.current_background_color = color;},
         _ => { println!("{:?} is an unknown command", command); }
     }
 }
@@ -247,6 +308,10 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
         if let Some(commands) = parse_slide_command(&line) {
             for command in commands {
                 handle_command(context, command);
+                // update page properties based on command...
+                {
+                    new_page.background_color = context.current_background_color.clone();
+                }
             }
         } else {
             if line.len() >= 1 {
@@ -372,9 +437,6 @@ use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
 fn main() {
-    let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
-    let video_subsystem = sdl2_context.video().unwrap();
-
     if false {
         println!("Testing markup");
         let source_test = "This is a *thing* Cool_right_ _sad _t t_";
@@ -385,13 +447,13 @@ fn main() {
         let markup_lex = MarkupLexer::new(source_test);
         println!("STITCHED TOGETHER STRING: {}", markup_lex.stitch());
     }
+
+    let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
+    let video_subsystem = sdl2_context.video().unwrap();
+
     let slideshow_source = load_file("test.slide");
     let slideshow_source = remove_comments_from_source(&slideshow_source);
     let slideshow = compile_slide(&slideshow_source);
-    println!("SLIDE:\n{:#?}", slideshow);
-    for page in slideshow {
-        render_page(&page);
-    }
 
     const DEFAULT_WINDOW_WIDTH : u32 = 1280;
     const DEFAULT_WINDOW_HEIGHT : u32 = 720;
@@ -404,15 +466,29 @@ fn main() {
     let mut running = true;
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
-    while running {
-        window_canvas.set_draw_color(SDLColor::RGB(255, 255, 255));
-        window_canvas.clear();
+    let mut current_slide_index = 0;
 
+    while running {
         for event in event_pump.poll_iter() {
             match event {
                 SDLEvent::Quit {..} =>  {running = false;},
                 _ => {}
             }
+        }
+
+        let current_slide : Option<&Page> = slideshow.get(current_slide_index);
+
+        if let Some(current_slide) = current_slide {
+            window_canvas.set_draw_color(
+                SDLColor::RGBA(current_slide.background_color.r,
+                               current_slide.background_color.g,
+                               current_slide.background_color.b,
+                               current_slide.background_color.a));
+            window_canvas.clear();
+        } else {
+            window_canvas.set_draw_color(SDLColor::RGB(10, 10, 16));
+            window_canvas.clear();
+            println!("no slide?");
         }
 
         window_canvas.present();
