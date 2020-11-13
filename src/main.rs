@@ -3,160 +3,14 @@
 
 TODO: Please rewrite the tokenizer.
 */
-#[derive(Debug)]
-/*
-I know there's a way to do it with just &str and slices, but
-the iteration work! OMG it's so much.
-*/
-enum Markup {
-    Plain(String),
-    Bold(String),
-    Strikethrough(String),
-    Italics(String),
-    Underlined(String),
-}
-
-// I had to lookup a basic lexer in Rust... Cause holy s**t whatever I was
-// doing was really confusing.
-struct MarkupLexer<'a> {
-    iterator: std::iter::Peekable<std::str::Chars<'a>>,
-}
-
-fn is_whitespace(c: char) -> bool {
-    c == ' ' || c == '\n' || c == '\t' || c == '\r'
-}
-
-/*
-   Real markup has multicharacter patterns, which
-   should still be fairly easy to adopt here...
-*/
-impl<'a> MarkupLexer<'a> {
-    // this is self consuming since the iterator
-    // will be used up. Probably debugging stuff.
-    fn stitch(self) -> String {
-        let mut result = String::new();
-        for item in self {
-            match item {
-                Markup::Plain(text_content) |
-                Markup::Bold(text_content) |
-                Markup::Strikethrough(text_content) |
-                Markup::Italics(text_content) |
-                Markup::Underlined(text_content) => {
-                    result.push_str(&text_content);
-                }
-            }
-        }
-        result
-    }
-
-    fn is_special_character(c: char) -> bool {
-        match c {
-            '*' | '/' | '_' | '+' => true,
-            _ => false,
-        }
-    }
-    fn new(source: &'a str) -> MarkupLexer<'a> {
-        MarkupLexer {
-            iterator: source.chars().peekable()
-        }
-    }
-
-    fn peek_character(&mut self) -> Option<&char> {
-        self.iterator.peek()
-    }
-
-    fn next_character(&mut self) -> Option<char> {
-        self.iterator.next()
-    }
-
-    fn next_words_until_special(&mut self) -> String {
-        let mut sentence : String = String::new();
-        let mut previous_character : Option<char> = None;
-
-        while let Some(&character) = self.peek_character() {
-            if MarkupLexer::is_special_character(character) {
-                if let Some(&next_character) = self.peek_character() {
-                    if let Some(previous_character) = previous_character {
-                        if !is_whitespace(next_character) && is_whitespace(previous_character) {
-                            return sentence;
-                        }
-                    }
-                }
-            }
-            sentence.push(character);
-            previous_character = Some(character);
-            self.next_character().unwrap();
-        }
-        sentence
-    }
-
-    fn find_type(identifier: char, text_contents: String) -> Markup {
-        match identifier {
-            '*' => Markup::Bold(text_contents),
-            '+' => Markup::Strikethrough(text_contents),
-            '/' => Markup::Italics(text_contents),
-            '_' => Markup::Underlined(text_contents),
-            _ => Markup::Plain(text_contents),
-        }
-    }
-
-    fn find_match_and_pass(&mut self, to_match: char) -> (String, bool) {
-        let mut sentence : String = String::new();
-        let mut previous_character : Option<char> = None;
-
-        while let Some(&character) = self.peek_character() {
-            if character == to_match {
-                let good_match = 
-                    if let Some(previous_character) = previous_character {
-                        if !is_whitespace(previous_character) {true} else {false}
-                    } else {
-                        false
-                    };
-                self.next_character();
-                return (sentence, good_match);
-            }
-            sentence.push(character);
-            previous_character = Some(character);
-            self.next_character().unwrap();
-        }
-        (sentence, false)
-    }
-
-    fn next_markup_item(&mut self) -> Option<Markup> {
-        fn string_prepend(input: &String, c: char) -> String {
-            let mut result = String::new();
-            result.push(c);
-            result.push_str(input);
-            result
-        }
-
-        if let Some(&character) = self.peek_character() {
-            if MarkupLexer::is_special_character(character) {
-                self.next_character();
-                if let (text_within_boundaries, true) = self.find_match_and_pass(character) {
-                    Some(MarkupLexer::find_type(character, text_within_boundaries))
-                } else {
-                    Some(Markup::Plain(string_prepend(&self.next_words_until_special(), character)))
-                }
-            } else {
-                Some(Markup::Plain(self.next_words_until_special()))
-            }
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a> Iterator for MarkupLexer<'a> {
-    type Item = Markup;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_markup_item()
-    }
-}
+mod markup;
+use self::markup::*;
 
 #[derive(Debug)]
 struct TextElement {
-    x: f32, y: f32, // What units should this be?
+    /*font?*/
+    x: f32,
+    y: f32,
     text: String, // In the case I allow variables or something...
 }
 #[derive(Debug)]
@@ -224,6 +78,7 @@ impl Color {
         Color {r, g, b, a}
     }
 
+    // TODO
     fn parse_hexadecimal_literal(hex: &str) -> Color {
         Color::new(0, 0, 0, 0)
     }
@@ -239,6 +94,7 @@ enum Command <'a> {
 
 /*
     I need to write a proper tokenizer. Instead of this
+FIXME
 */
 fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
     /*Since I still lex by char, I really only need to support string literals...*/
@@ -341,6 +197,7 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
 }
 
 // Tokenizes a command into a real command.
+// TODO!
 fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>> {
     let mut args = command.args.iter();
 
@@ -361,11 +218,12 @@ fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>
             } else {
                 None
             }
-        }
+        },
         _ => { None },
     }
 }
 
+// TODO!
 fn execute_command(context: &mut SlideSettingsContext, command: Command) {
     match command {
         _ => { println!("{:?} is an unknown command", command); }
@@ -475,8 +333,24 @@ fn remove_comments_from_source(source : &str) -> String {
 
 fn render_page(page: &Page) {
     for text in &page.text_elements {
-        let mut cursor_x : f32 = 0.0;
-        let mut cursor_y : f32 = 0.0;
+        let mut cursor_x : f32 = text.x;
+        let mut cursor_y : f32 = text.y;
+
+        let markup_lexer = MarkupLexer::new(&text.text);
+        for markup in markup_lexer {
+            match markup {
+                Markup::Plain(text_content) => {
+                },
+                Markup::Bold(text_content) => {
+                },
+                Markup::Strikethrough(text_content) => {
+                },
+                Markup::Italics(text_content) => {
+                },
+                Markup::Underlined(text_content) => {
+                }
+            }
+        }
     }
 }
 
@@ -492,7 +366,7 @@ fn load_file(file_name: &str) -> String {
 }
 
 fn main() {
-    {
+    if false {
         println!("Testing markup");
         let source_test = "This is a *thing* Cool_right_ _sad _t t_";
         let markup_lex = MarkupLexer::new(source_test);
