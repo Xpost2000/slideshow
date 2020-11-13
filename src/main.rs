@@ -436,6 +436,16 @@ use sdl2::pixels::Color as SDLColor;
 use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
+fn clamp_i32(x: i32, min: i32, max: i32) -> i32 {
+    if x < min {
+        min
+    } else if x > max {
+        max
+    } else {
+        x
+    }
+}
+
 fn main() {
     if false {
         println!("Testing markup");
@@ -466,18 +476,26 @@ fn main() {
     let mut running = true;
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
-    let mut current_slide_index = 0;
+    let mut current_slide_index : i32 = 0;
 
     while running {
         for event in event_pump.poll_iter() {
             match event {
                 SDLEvent::Quit {..} =>  {running = false;},
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
+                    current_slide_index += 1;
+                },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
+                    current_slide_index -= 1;
+                },
                 _ => {}
             }
         }
 
-        let current_slide : Option<&Page> = slideshow.get(current_slide_index);
+        current_slide_index = clamp_i32(current_slide_index as i32, 0, slideshow.len() as i32);
+        let current_slide : Option<&Page> = slideshow.get(current_slide_index as usize);
 
+        println!("current-slide: {}", current_slide_index);
         if let Some(current_slide) = current_slide {
             window_canvas.set_draw_color(
                 SDLColor::RGBA(current_slide.background_color.r,
@@ -488,7 +506,6 @@ fn main() {
         } else {
             window_canvas.set_draw_color(SDLColor::RGB(10, 10, 16));
             window_canvas.clear();
-            println!("no slide?");
         }
 
         window_canvas.present();
