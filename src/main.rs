@@ -365,7 +365,16 @@ fn load_file(file_name: &str) -> String {
     result
 }
 
+extern crate sdl2;
+
+use sdl2::pixels::Color as SDLColor;
+use sdl2::event::Event as SDLEvent;
+use sdl2::keyboard::Keycode as SDLKeycode;
+
 fn main() {
+    let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
+    let video_subsystem = sdl2_context.video().unwrap();
+
     if false {
         println!("Testing markup");
         let source_test = "This is a *thing* Cool_right_ _sad _t t_";
@@ -376,14 +385,37 @@ fn main() {
         let markup_lex = MarkupLexer::new(source_test);
         println!("STITCHED TOGETHER STRING: {}", markup_lex.stitch());
     }
-    if false {
-        let slideshow_source = load_file("test.slide");
-        let slideshow_source = remove_comments_from_source(&slideshow_source);
-        let slideshow = compile_slide(&slideshow_source);
-        println!("SLIDE:\n{:#?}", slideshow);
-        for page in slideshow {
-            render_page(&page);
+    let slideshow_source = load_file("test.slide");
+    let slideshow_source = remove_comments_from_source(&slideshow_source);
+    let slideshow = compile_slide(&slideshow_source);
+    println!("SLIDE:\n{:#?}", slideshow);
+    for page in slideshow {
+        render_page(&page);
+    }
+
+    const DEFAULT_WINDOW_WIDTH : u32 = 1280;
+    const DEFAULT_WINDOW_HEIGHT : u32 = 720;
+    let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        .position_centered()
+        .build()
+        .expect("Window failed to open?");
+
+    let mut window_canvas = window.into_canvas().build().unwrap();
+    let mut running = true;
+
+    let mut event_pump = sdl2_context.event_pump().unwrap();
+    while running {
+        window_canvas.set_draw_color(SDLColor::RGB(255, 255, 255));
+        window_canvas.clear();
+
+        for event in event_pump.poll_iter() {
+            match event {
+                SDLEvent::Quit {..} =>  {running = false;},
+                _ => {}
+            }
         }
+
+        window_canvas.present();
     }
     // render_present_slide(&slideshow);
 }
