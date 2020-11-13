@@ -300,10 +300,11 @@ fn handle_command(context: &mut SlideSettingsContext, command: SlideLineCommand)
 }
 
 fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page {
-    let mut line_breaks : u32 = 0; // used for calculating relative y.
+    let mut current_line : u32 = 0;
     let mut new_page : Page = Page::default();
 
-    println!("lines: {:?}", page_lines);
+    // TODO: Account for dynamically sized text.
+    // println!("lines: {:?}", page_lines);
     for line in page_lines {
         if let Some(commands) = parse_slide_command(&line) {
             for command in commands {
@@ -316,11 +317,9 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
         } else {
             if line.len() >= 1 {
                 println!("plain text: {}", line);
-                new_page.text_elements.push(TextElement{x: 0.0, y: 0.0, text: String::from(line)});
-            } else {
-                println!("line break!");
-                line_breaks += 1;
+                new_page.text_elements.push(TextElement{x: 0.0, y: current_line as f32, text: String::from(line)});
             }
+            current_line += 1;
         }
     }
 
@@ -396,29 +395,6 @@ fn remove_comments_from_source(source : &str) -> String {
     filtered
 }
 
-fn render_page(page: &Page) {
-    for text in &page.text_elements {
-        let mut cursor_x : f32 = text.x;
-        let mut cursor_y : f32 = text.y;
-
-        let markup_lexer = MarkupLexer::new(&text.text);
-        for markup in markup_lexer {
-            match markup {
-                Markup::Plain(text_content) => {
-                },
-                Markup::Bold(text_content) => {
-                },
-                Markup::Strikethrough(text_content) => {
-                },
-                Markup::Italics(text_content) => {
-                },
-                Markup::Underlined(text_content) => {
-                }
-            }
-        }
-    }
-}
-
 fn load_file(file_name: &str) -> String {
     use std::io::Read;
     use std::fs::File;
@@ -461,6 +437,8 @@ fn main() {
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
     let video_subsystem = sdl2_context.video().unwrap();
 
+    let sdl2_ttf_context = sdl2::ttf::init().expect("SDL2 ttf failed to initialize?");
+
     let slideshow_source = load_file("test.slide");
     let slideshow_source = remove_comments_from_source(&slideshow_source);
     let slideshow = compile_slide(&slideshow_source);
@@ -473,6 +451,10 @@ fn main() {
         .expect("Window failed to open?");
 
     let mut window_canvas = window.into_canvas().build().unwrap();
+    let texture_creator = window_canvas.texture_creator(); 
+
+    let mut default_font = sdl2_ttf_context.load_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf", 36).unwrap();
+
     let mut running = true;
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
@@ -497,18 +479,60 @@ fn main() {
 
         println!("current-slide: {}", current_slide_index);
         if let Some(current_slide) = current_slide {
-            window_canvas.set_draw_color(
-                SDLColor::RGBA(current_slide.background_color.r,
-                               current_slide.background_color.g,
-                               current_slide.background_color.b,
-                               current_slide.background_color.a));
-            window_canvas.clear();
+            // rendering the slide
+            {
+                window_canvas.set_draw_color(
+                    SDLColor::RGBA(current_slide.background_color.r,
+                                   current_slide.background_color.g,
+                                   current_slide.background_color.b,
+                                   current_slide.background_color.a));
+                window_canvas.clear();
+
+                for text in &current_slide.text_elements {
+                    let mut cursor_x : f32 = text.x;
+                    let mut cursor_y : f32 = text.y;
+
+                    let mut texture = texture_creator.create_texture_from_surface(
+                        &default_font.render(&text.text)
+                            .blended(SDLColor::RGBA(255, 255, 255, 255)).expect("how did this go wrong?")
+                    ).expect("how did this go wrong?");
+                    window_canvas.set_draw_color(SDLColor::RGBA(0, 0, 0, 255));
+                    let sdl2::render::TextureQuery { width, height, .. } = texture.query();
+                    texture.set_color_mod(0, 0, 0);
+                    texture.set_alpha_mod(255);
+                    window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new(0, (text.y * height as f32) as i32, width, height)));
+
+                    if false {
+                        let markup_lexer = MarkupLexer::new(&text.text);
+                        for markup in markup_lexer {
+                            match markup {
+                                Markup::Plain(text_content) => {
+                                },
+                                Markup::Bold(text_content) => {
+                                },
+                                Markup::Strikethrough(text_content) => {
+                                },
+                                Markup::Italics(text_content) => {
+                                },
+                                Markup::Underlined(text_content) => {
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         } else {
             window_canvas.set_draw_color(SDLColor::RGB(10, 10, 16));
             window_canvas.clear();
+            let mut texture = texture_creator.create_texture_from_surface(
+                &default_font.render("stupid slide needs pages... Feed me")
+                    .blended(SDLColor::RGBA(255, 255, 255, 255)).expect("how did this go wrong?")
+            ).expect("how did this go wrong?");
+            window_canvas.set_draw_color(SDLColor::RGBA(0, 0, 0, 255));
+            let sdl2::render::TextureQuery { width, height, .. } = texture.query();
+            window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new((DEFAULT_WINDOW_WIDTH as i32 / 2) - width as i32 / 2, (DEFAULT_WINDOW_HEIGHT as i32 / 2) - height as i32 / 2, width, height)));
         }
 
         window_canvas.present();
     }
-    // render_present_slide(&slideshow);
 }
