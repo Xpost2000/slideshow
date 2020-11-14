@@ -2,7 +2,10 @@
     beginnings of a slideshow program?
 
 TODO: Please rewrite the tokenizer.
+TODO: Fix lifetimes...
 */
+use std::collections::HashMap;
+
 mod markup;
 use self::markup::*;
 mod utility;
@@ -21,7 +24,7 @@ The actual slide I guess can be compiled ahead of time.
 I should probably do slide livereloading cause it's cool and also cause slides
 are pretty visual and would probably be best with feedback
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct Color {
     r: u8,
     g: u8,
@@ -312,7 +315,7 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
                 handle_command(context, command);
                 // update page properties based on command...
                 {
-                    new_page.background_color = context.current_background_color.clone();
+                    new_page.background_color = context.current_background_color;
                 }
             }
         } else {
@@ -388,6 +391,152 @@ use sdl2::pixels::Color as SDLColor;
 use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
+type SDL2WindowCanvas = sdl2::render::Canvas<sdl2::video::Window>;
+// hashmaps of hashmaps?
+// Yeah this is not a good idea, but whatever for now.
+
+// TODO: convert this to &str.
+struct SDL2FontAsset<'ttf> {
+    file_name: String,
+    stored_sizes : HashMap<u16, sdl2::ttf::Font<'ttf, 'static>>,
+}
+
+impl<'ttf> SDL2FontAsset<'ttf> {
+    fn new(file_name: String) -> SDL2FontAsset<'ttf> {
+        SDL2FontAsset {file_name: file_name.clone(), stored_sizes: HashMap::new(),}
+    }
+
+    fn new_with_common_sizes(file_name: String, ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext) -> SDL2FontAsset<'ttf> {
+        SDL2FontAsset {
+            file_name: file_name.clone(),
+            stored_sizes: {
+                let mut okay_table_i_guess = HashMap::new();
+                // probably common sizes.
+                for font_size in &[10, 11, 12, 14, 16, 18, 24, 32, 36, 48, 64, 72, 84, 96, 128] {
+                    okay_table_i_guess.insert(*font_size, ttf_context.load_font(file_name.clone(), *font_size).unwrap());
+                }
+
+                okay_table_i_guess
+            }
+        }
+    }
+
+    fn load_size_if_not_loaded(&mut self, font_size: u16, ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext) {
+        if let None = self.stored_sizes.get(&font_size) {
+            self.stored_sizes.insert(font_size, ttf_context.load_font(self.file_name.clone(), font_size).unwrap());
+        }
+    }
+
+    fn get_size(&mut self, font_size: u16, ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext) -> &sdl2::ttf::Font<'ttf, 'static> {
+        self.load_size_if_not_loaded(font_size, ttf_context);
+        self.stored_sizes.get(&font_size).unwrap()
+    }
+
+    fn get_size_mut(&mut self, font_size: u16, ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext) -> &mut sdl2::ttf::Font<'ttf, 'static> {
+        self.load_size_if_not_loaded(font_size, ttf_context);
+        self.stored_sizes.get_mut(&font_size).unwrap()
+    }
+}
+
+struct SDL2GraphicsContext<'ttf> {
+    window_canvas : SDL2WindowCanvas,
+    ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
+    font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
+}
+
+// lots of interface and safety changes to be made.
+impl<'ttf> SDL2GraphicsContext<'ttf> {
+    fn new(window: sdl2::video::Window, ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext) -> SDL2GraphicsContext<'ttf> {
+        SDL2GraphicsContext {
+            window_canvas: window.into_canvas().build().unwrap(),
+            ttf_context,
+            font_assets: HashMap::new()
+        }
+    }
+
+    fn add_font<'a>(&mut self, font_name: &'a str) -> &'a str {
+        self.font_assets.insert(font_name.to_owned(),
+                                SDL2FontAsset::new_with_common_sizes(font_name.to_owned(), &self.ttf_context));
+        font_name
+    }
+
+    fn window(&self) -> &sdl2::video::Window {
+        self.window_canvas.window()
+    }
+
+    fn window_mut(&mut self) -> &mut sdl2::video::Window {
+        self.window_canvas.window_mut()
+    }
+
+    fn present(&mut self) {
+        self.window_canvas.present();
+    }
+
+    fn clear_color(&mut self, clear_color: Color) {
+        self.window_canvas.set_draw_color(
+            SDLColor::RGBA(
+                clear_color.r,
+                clear_color.g,
+                clear_color.b,
+                clear_color.a,
+            )
+        );
+        self.window_canvas.clear();
+    }
+
+    fn get_font_asset(&self, font_id: &str) -> Option<&SDL2FontAsset<'ttf>> {
+        self.font_assets.get(font_id)
+    } 
+
+    fn get_font_asset_mut(&mut self, font_id: &str) -> Option<&mut SDL2FontAsset<'ttf>> {
+        self.font_assets.get_mut(font_id)
+    } 
+
+    fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
+        let ttf_context = self.ttf_context;
+        let font_asset = self.get_font_asset_mut(font_id);
+        if let Some(font_asset) = font_asset {
+            let font_asset_at_size = font_asset.get_size(font_size, ttf_context);
+            let (width, height) = font_asset_at_size.size_of(text).unwrap();
+            (width, height)
+        } else {
+            (0, 0)
+        }
+    }
+
+    fn render_text(&mut self, font_id: &str, x: f32, y: f32, text: &str, font_size: u16, color: Color) {
+        let ttf_context = self.ttf_context;
+        let texture_creator = self.window_canvas.texture_creator();
+
+        let font = {
+            let font_asset = self.get_font_asset_mut(font_id);
+            if let Some(font_asset) = font_asset {
+                let font = font_asset.get_size(font_size, ttf_context);
+                Some(font)
+            } else {
+                None
+            }
+        };
+
+        match font {
+            Some(font) => {
+                let mut texture = texture_creator.create_texture_from_surface(
+                    &font.render(text)
+                        .blended(SDLColor::RGBA(255, 255, 255, 255))
+                        .expect("how did this go wrong?")
+                ).expect("how did this go wrong?");
+
+                texture.set_color_mod(color.r, color.g, color.b);
+                texture.set_alpha_mod(color.a);
+
+                let sdl2::render::TextureQuery { width, height, .. } = texture.query();
+                self.window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new(x as i32, y as i32, width, height))).unwrap();
+            },
+            None => {}
+        }
+    }
+}
+
 fn main() {
     if false {
         println!("Testing markup");
@@ -405,10 +554,6 @@ fn main() {
 
     let sdl2_ttf_context = sdl2::ttf::init().expect("SDL2 ttf failed to initialize?");
 
-    let slideshow_source = load_file("test.slide");
-    let slideshow_source = remove_comments_from_source(&slideshow_source);
-    let slideshow = compile_slide(&slideshow_source);
-
     const DEFAULT_WINDOW_WIDTH : u32 = 1280;
     const DEFAULT_WINDOW_HEIGHT : u32 = 720;
     let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
@@ -416,15 +561,19 @@ fn main() {
         .build()
         .expect("Window failed to open?");
 
-    let mut window_canvas = window.into_canvas().build().unwrap();
-    let texture_creator = window_canvas.texture_creator(); 
-
-    let mut default_font = sdl2_ttf_context.load_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf", 36).unwrap();
+    let mut graphics_context = SDL2GraphicsContext::new(window, &sdl2_ttf_context);
+    let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
 
     let mut running = true;
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
     let mut current_slide_index : i32 = 0;
+
+    let slideshow_source = load_file("test.slide");
+    let slideshow_source = remove_comments_from_source(&slideshow_source);
+    let slideshow = compile_slide(&slideshow_source);
+
+    let default_size = 32;
 
     while running {
         for event in event_pump.poll_iter() {
@@ -443,62 +592,47 @@ fn main() {
         current_slide_index = clamp_i32(current_slide_index as i32, 0, slideshow.len() as i32);
         let current_slide : Option<&Page> = slideshow.get(current_slide_index as usize);
 
-        println!("current-slide: {}", current_slide_index);
         if let Some(current_slide) = current_slide {
             // rendering the slide
             {
-                window_canvas.set_draw_color(
-                    SDLColor::RGBA(current_slide.background_color.r,
-                                   current_slide.background_color.g,
-                                   current_slide.background_color.b,
-                                   current_slide.background_color.a));
-                window_canvas.clear();
+                graphics_context.clear_color(current_slide.background_color);
 
                 for text in &current_slide.text_elements {
-                    let mut cursor_x : f32 = text.x;
-                    let mut cursor_y : f32 = text.y;
+                    // let mut cursor_x : f32 = text.x;
+                    // let mut cursor_y : f32 = text.y;
 
-                    let mut texture = texture_creator.create_texture_from_surface(
-                        &default_font.render(&text.text)
-                            .blended(SDLColor::RGBA(255, 255, 255, 255)).expect("how did this go wrong?")
-                    ).expect("how did this go wrong?");
-                    window_canvas.set_draw_color(SDLColor::RGBA(0, 0, 0, 255));
-                    let sdl2::render::TextureQuery { width, height, .. } = texture.query();
-                    texture.set_color_mod(0, 0, 0);
-                    texture.set_alpha_mod(255);
-                    window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new(0, (text.y * height as f32) as i32, width, height)));
+                    let (_, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", default_size);
+                    graphics_context.render_text(default_font,
+                                                 0.0, text.y * height as f32,
+                                                 &text.text, default_size,
+                                                 Color::new(0, 0, 0, 255));
 
-                    if false {
-                        let markup_lexer = MarkupLexer::new(&text.text);
-                        for markup in markup_lexer {
-                            match markup {
-                                Markup::Plain(text_content) => {
-                                },
-                                Markup::Bold(text_content) => {
-                                },
-                                Markup::Strikethrough(text_content) => {
-                                },
-                                Markup::Italics(text_content) => {
-                                },
-                                Markup::Underlined(text_content) => {
-                                }
+                    let markup_lexer = MarkupLexer::new(&text.text);
+                    for markup in markup_lexer {
+                        match markup {
+                            Markup::Plain(text_content) => {
+                            },
+                            Markup::Bold(text_content) => {
+                            },
+                            Markup::Strikethrough(text_content) => {
+                            },
+                            Markup::Italics(text_content) => {
+                            },
+                            Markup::Underlined(text_content) => {
                             }
                         }
                     }
                 }
             }
         } else {
-            window_canvas.set_draw_color(SDLColor::RGB(10, 10, 16));
-            window_canvas.clear();
-            let mut texture = texture_creator.create_texture_from_surface(
-                &default_font.render("stupid slide needs pages... Feed me")
-                    .blended(SDLColor::RGBA(255, 255, 255, 255)).expect("how did this go wrong?")
-            ).expect("how did this go wrong?");
-            window_canvas.set_draw_color(SDLColor::RGBA(0, 0, 0, 255));
-            let sdl2::render::TextureQuery { width, height, .. } = texture.query();
-            window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new((DEFAULT_WINDOW_WIDTH as i32 / 2) - width as i32 / 2, (DEFAULT_WINDOW_HEIGHT as i32 / 2) - height as i32 / 2, width, height)));
+            graphics_context.clear_color(Color::new(10, 10, 16, 255));
+            let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", 48);
+            graphics_context.render_text(default_font,
+                                         ((DEFAULT_WINDOW_WIDTH as i32 / 2) - (width as i32) / 2) as f32,
+                                         ((DEFAULT_WINDOW_HEIGHT as i32 / 2) - (height as i32) / 2) as f32,
+                                         "stupid slide needs pages... feed me", 48, COLOR_WHITE);
         }
 
-        window_canvas.present();
+        graphics_context.present();
     }
 }
