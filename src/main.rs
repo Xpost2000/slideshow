@@ -520,12 +520,20 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
         self.font_assets.get_mut(font_id)
     } 
 
-    fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
+    fn find_text_asset_by_size(&mut self, font_id: &str, font_size: u16) -> Option<&sdl2::ttf::Font<'ttf, 'static>> {
         let ttf_context = self.ttf_context;
         let font_asset = self.get_font_asset_mut(font_id);
+
         if let Some(font_asset) = font_asset {
-            let font_asset_at_size = font_asset.get_size(font_size, ttf_context);
-            let (width, height) = font_asset_at_size.size_of(text).unwrap();
+            Some(font_asset.get_size(font_size, ttf_context))
+        } else {
+            None
+        }
+    }
+
+    fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
+        if let Some(font_at_size) = self.find_text_asset_by_size(font_id, font_size) {
+            let (width, height) = font_at_size.size_of(text).unwrap();
             (width, height)
         } else {
             (0, 0)
@@ -536,17 +544,7 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
         let ttf_context = self.ttf_context;
         let texture_creator = self.window_canvas.texture_creator();
 
-        let font = {
-            let font_asset = self.get_font_asset_mut(font_id);
-            if let Some(font_asset) = font_asset {
-                let font = font_asset.get_size(font_size, ttf_context);
-                Some(font)
-            } else {
-                None
-            }
-        };
-
-        match font {
+        match self.find_text_asset_by_size(font_id, font_size) {
             Some(font) => {
                 let mut texture = texture_creator.create_texture_from_surface(
                     &font.render(text)
