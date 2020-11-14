@@ -3,6 +3,41 @@ $font:"data/fonts/inconsolata/Inconsolata Regular.ttf"
 
 $page
 $background_color:#FFFFFF
+$color:#444444
+$font-size: 32
+                                                      Jerry Presents:
+$color:#333333
+$font-size: 122
+          STUPID
+      SLIDESHOW
+$color:#777777
+$font-size: 48
+               A stupid slideshow program in Rust,
+               Yeah as of this version there's no layout
+               or alignment, so it's done by hand :(
+$end_page
+
+$page
+$background_color:#FFFFFF
+$color:#444444
+$font-size: 80
+        _Why did I make this_?
+$color:#666666
+$font-size: 36
+      When I could have used:
+
+$color:#888888
+        - LibreOffice Present
+
+        - Microsoft Powerpoint
+
+        - Suckless SENT
+
+        - Or paint and Windows Picture Viewer
+$end_page
+
+$page
+$background_color:#FFFFFF
 $color:#000000
 $font-size: 80
      REASONS TO USE THIS:
@@ -38,8 +73,8 @@ $background_color:#FFFFFF
 $font-size: 72
 $color:#555555
 
+              So....
 
 
-
-+Questions?+
+              Any Questions?
 $end_page
