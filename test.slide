@@ -2,14 +2,34 @@
 $font:"data/fonts/inconsolata/Inconsolata Regular.ttf" 
 
 $page
+$background_color:#FFFFFF
+$color:#000000
+$font-size: 84
+Hello World
+
+$font-size: 8
+Yep I know
+
+$font-size: 24
+I'm sure you do.
+$end_page
+$page
 # $background_color:#FF0000FF
 # tomato
-$background_color:#FF6347
+$background_color:#266CE1
+$color:#000000
+$font-size:16
 This is a test slide, here's some text.
 This should be part of a paragraph and it should look correct.
-$color:#FFFF00FF
-Yes?
 
+space?
+$color:#FFFF00FF
+$font-size:84
+Yes?
+$color:#FF0000FF
+RATS! EVERYWHERE!
+
+$font-size:32
 $color:#FFFF00FF
 There should be the equivalent of a line break above.
 $end_page
@@ -24,6 +44,39 @@ $end_page
 
 $page
 $background_color:#FFFFFF
+# $align:center
+$color:#000000
+$font-size: 80
+     REASONS TO USE THIS:
+$color:#555555
+$font-size: 35
+            - It's probably going to be F.O.S.S.
+$font-size: 16
+$color:#888888
+                               (Free and Open Source Software)
+$color:#555555
+$font-size: 35
+            - Uses plain-text! Easy data manipulation
+$font-size: 16
+$color:#888888
+                               (Don't like typing? Ask a friend to code a WYSIWYG editor :))
+$color:#555555
+$font-size: 35
+            - It's made in *Rust.*
+            - It's also a lightweight tool
+            - +Start typing to produce complete trash+
+            - I mean really cool looking slides like me!
+            - Also hot-reloadable slides!
+$font-size: 16
+$color:#888888
+                               (Since this is a text document?)
+$end_page
+
+$page
+$background_color:#FFFFFF
+# $align:center
+$font-size: 72
+$color:#555555
 _End of presentation_
 +Questions?+
 $end_page

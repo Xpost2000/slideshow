@@ -92,8 +92,10 @@ const COLOR_BLACK : Color = Color {r: 0, g: 0, b: 0, a: 0};
 struct TextElement {
     /*font?*/
     x: f32,
-    y: f32,
+    y: f32, // TODO: Rename to linebreaks between. Or something
     text: String, // In the case I allow variables or something...
+    color: Color,
+    font_size: u16,
 }
 #[derive(Debug)]
 struct Page {
@@ -125,6 +127,7 @@ type Slide = Vec<Page>;
 struct SlideSettingsContext {
     current_background_color: Color,
     current_element_color: Color,
+    current_font_size: u16,
 }
 
 impl Default for SlideSettingsContext {
@@ -132,6 +135,7 @@ impl Default for SlideSettingsContext {
         SlideSettingsContext{
             current_background_color: COLOR_WHITE,
             current_element_color: COLOR_BLACK,
+            current_font_size: 48,
         }
     }
 }
@@ -149,6 +153,7 @@ enum Command <'a> {
     SetFont(&'a str),
     SetBackgroundColor(Color),
     SetColor(Color),
+    SetFontSize(u16),
 }
 
 /*
@@ -282,6 +287,16 @@ fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>
                 None
             }
         },
+        "font-size" => {
+            if let Some(next) = &args.next() {
+                match next.parse::<u16>() {
+                    Ok(value) => { Some(Command::SetFontSize(value)) },
+                    Err(_) => None
+                }
+            } else {
+                None
+            }
+        }
         _ => { None },
     }
 }
@@ -291,6 +306,7 @@ fn execute_command(context: &mut SlideSettingsContext, command: Command) {
     match command {
         Command::SetColor(color) => {context.current_element_color = color;},
         Command::SetBackgroundColor(color) => {context.current_background_color = color;},
+        Command::SetFontSize(font_size) => {context.current_font_size = font_size;}
         _ => { println!("{:?} is an unknown command", command); }
     }
 }
@@ -321,9 +337,15 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
         } else {
             if line.len() >= 1 {
                 println!("plain text: {}", line);
-                new_page.text_elements.push(TextElement{x: 0.0, y: current_line as f32, text: String::from(line)});
+                new_page.text_elements.push(TextElement{x: 0.0,
+                                                        y: current_line as f32,
+                                                        text: String::from(line),
+                                                        font_size: context.current_font_size,
+                                                        color: context.current_element_color});
+                current_line = 0;
+            } else {
+                current_line += 1;
             }
-            current_line += 1;
         }
     }
 
@@ -535,6 +557,18 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
             None => {}
         }
     }
+
+    fn render_filled_rectangle(&mut self, x: f32, y: f32, w: f32, h: f32, color: Color) {
+        self.window_canvas.set_draw_color(
+            SDLColor::RGBA(
+                color.r,
+                color.g,
+                color.b,
+                color.a
+            )
+        );
+        self.window_canvas.fill_rect(sdl2::rect::Rect::new(x as i32, y as i32, w as u32, h as u32));
+    }
 }
 
 fn main() {
@@ -573,8 +607,6 @@ fn main() {
     let slideshow_source = remove_comments_from_source(&slideshow_source);
     let slideshow = compile_slide(&slideshow_source);
 
-    let default_size = 32;
-
     while running {
         for event in event_pump.poll_iter() {
             match event {
@@ -597,31 +629,72 @@ fn main() {
             {
                 graphics_context.clear_color(current_slide.background_color);
 
+                let mut last_font_size : u16 = 0;
+                let mut cursor_y : f32 = 0.0;
                 for text in &current_slide.text_elements {
-                    // let mut cursor_x : f32 = text.x;
-                    // let mut cursor_y : f32 = text.y;
-
-                    let (_, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", default_size);
-                    graphics_context.render_text(default_font,
-                                                 0.0, text.y * height as f32,
-                                                 &text.text, default_size,
-                                                 Color::new(0, 0, 0, 255));
+                    let font_size = text.font_size;
+                    let mut cursor_x : f32 = 0.0;
 
                     let markup_lexer = MarkupLexer::new(&text.text);
+                    let (_, height) = graphics_context.text_dimensions(default_font, &text.text, font_size);
+                    cursor_y += last_font_size as f32 * text.y;
+                    /*
+                    I want to remove this.
+                    There is a slight chance of this being kept, so I'll just have to factor it later,
+                    since the markup splits things into segments which to re-render the whole string
+                    require a cursor, to render in the right place. Not a big issue though.
+                    */
                     for markup in markup_lexer {
+                        let mut width = 0;
                         match markup {
                             Markup::Plain(text_content) => {
+                                graphics_context.render_text(default_font,
+                                                             cursor_x, cursor_y,
+                                                             &text_content, font_size,
+                                                             text.color);
+                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
                             },
                             Markup::Bold(text_content) => {
+                                // for now just darken slightly.
+                                graphics_context.render_text(default_font,
+                                                             cursor_x, cursor_y,
+                                                             &text_content, font_size,
+                                                             Color::new(
+                                                                 text.color.r / 2,
+                                                                 text.color.g / 2,
+                                                                 text.color.b / 2,
+                                                                 text.color.a,
+                                                             ));
+                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
                             },
                             Markup::Strikethrough(text_content) => {
+                                graphics_context.render_text(default_font,
+                                                             cursor_x, cursor_y,
+                                                             &text_content, font_size,
+                                                             text.color);
+                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
+                                graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32 / 1.8), width as f32, font_size as f32 / 10.0, text.color);
                             },
                             Markup::Italics(text_content) => {
+                                graphics_context.render_text(default_font,
+                                                             cursor_x, cursor_y,
+                                                             &text_content, font_size,
+                                                             text.color);
+                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
                             },
                             Markup::Underlined(text_content) => {
+                                graphics_context.render_text(default_font,
+                                                             cursor_x, cursor_y,
+                                                             &text_content, font_size,
+                                                             text.color);
+                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
                             }
                         }
+                        cursor_x += width as f32;
                     }
+
+                    cursor_y += (height as f32);
+                    last_font_size = font_size;
                 }
             }
         } else {
