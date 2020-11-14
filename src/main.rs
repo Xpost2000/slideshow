@@ -643,6 +643,9 @@ fn main() {
 
                     let markup_lexer = MarkupLexer::new(&text.text);
                     let (_, height) = graphics_context.text_dimensions(default_font, &text.text, font_size);
+                    // last_font_size should always be non-negative. If we don't have a last just
+                    // use the current font size (only for like the first line).
+                    if last_font_size == 0 { last_font_size = height as u16; }
                     cursor_y += last_font_size as f32 * text.y;
                     /*
                     I want to remove this.
