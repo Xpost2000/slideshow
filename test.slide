@@ -1,8 +1,8 @@
 # Slide Format
 $font:"data/fonts/inconsolata/Inconsolata Regular.ttf" 
+$background_color:#FFFFFF
 
 $page
-$background_color:#FFFFFF
 $color:#444444
 $font-size: 32
                                                       Jerry Presents:
@@ -18,29 +18,221 @@ $font-size: 48
 $end_page
 
 $page
-$background_color:#FFFFFF
 $color:#444444
 $font-size: 80
         _Why did I make this_?
 $color:#666666
 $font-size: 36
+
       When I could have used:
 
 $color:#888888
         - LibreOffice Present
-
         - Microsoft Powerpoint
-
         - Suckless SENT
-
         - Or paint and Windows Picture Viewer
 $end_page
 
 $page
-$background_color:#FFFFFF
+$color:#444444
+$font-size: 80
+        _Why did I make this_?
+$color:#666666
+$font-size: 36
+
+      When I could have used:
+
+$color:#888888
+        - +LibreOffice Present+
+        - +Microsoft Powerpoint+
+$color:#444444
+$font-size: 24
+                    Installing an office suite that I will rarely use just to
+                    occasionally present is pretty stupid honestly.
+
+                    I use ORG mode for most of my documents anyways. Also I don't
+                    need particularly fancy presentations, and I'd prefer something
+                    that starts lightning fast.
+$color:#888888
+$font-size: 36
+        - Suckless SENT
+        - Or paint and Windows Picture Viewer
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+        _Why did I make this_?
+$color:#666666
+$font-size: 36
+
+      When I could have used:
+
+$color:#888888
+        - +LibreOffice Present+
+        - +Microsoft Powerpoint+
+        - +Suckless SENT+
+        - +Or paint and Windows Picture Viewer+
+$color:#444444
+$font-size: 24
+                    While suckless software is great, as is evident I like being relatively
+                    detailed. So I don't subscribe to the _Takahashi Method_ for presentations.
+
+                    As for the last one, well... I have standards, but I think we all do ;)
+                    Also cause it's fun.
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+                 _Why Rust_?
+$color:#666666
+$font-size: 32
+              C is unsafe, and I would be prone to having more bugs.
+              Although I would've had a version come out faster...
+
+              C++ is unsafe, and doesn't improve much on C. STL does
+              help a bit, but I'm ultimately still vulnerable to the same
+              pitfalls just with some training wheels.
+
+              Java... Just no...
+
+              Common Lisp, because dumping an image is cumbersome
+              for a slideshow program, and also cause I don't know how to
+              write a treeshaker and I don't have a license for Lispworks.
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+                 _Why Rust_?
+$color:#666666
+$font-size: 30
+              While lacking in interactiveness like Common Lisp...
+              Rust as a language retains most of it's _expressiveness_.
+
+$font-size: 18
+$color:#33AA33
+                                    game_get_random_item_from_loot_list(
+                                            match game_stage {
+                                                GameStage::Introduction | GameStage::Tutorial => None,
+                                                GameStage::Act1 | GameStage::Act2 => Some(low_level_loot_list),
+                                                GameStage::Act3 => Some(medium_level_loot_list),
+                                                GameStage::MajorDecision(faction) =>
+                                                        if faction.good {
+                                                           Some(good_level_loot_list)
+                                                        } else {
+                                                           Some(really_good_level_loot_list)
+                                                        },
+                                                GameStage::Apocolypse => None,
+                                            }
+                                    );
+$color:#666666
+$font-size: 30
+            Good luck trying to write that elegantly in C++
+            without using lambda hackery to get "pattern" matching.
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+                 _Why Rust_?
+$color:#666666
+$font-size: 30
+        Rust as a language first and foremost, promotes safety and security.
+        If you can compile Rust code, rest assured it'll basically never crash.
+        Even the logical errors never crash your program!
+
+        Rust does this through it's borrowchecker and lifetime annotations to
+        carefully manage access of references.
+
+        This allows you to reason and understand the relationships between
+        your data structures because often data structures need to reference
+        some other data.
+
+        This guarantees you will never access memory that is invalid because you
+        make a contract with the compiler that it can never happen.
+
+$color:#FF3333
+       DISCLAIMER: Jerry does not claim to be proficient in Rust! 
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+           _Simple Example_?
+
+$font-size: 22
+$color:#33AA33
+                                                        /// From this program at this moment in time.
+                                                        struct SDL2GraphicsContext {
+                                                            window_canvas : SDL2WindowCanvas,
+                                                            ttf_context : &sdl2::ttf::Sdl2TtfContext,
+                                                            font_assets : HashMap<String, SDL2FontAsset>,
+                                                        }
+$color:#666666
+$font-size: 30
+                            Since this only contains one reference
+                            this is a really trivial case, but useful to see.
+
+                               - What is the lifetime of ttf_context?
+                               - Would anything else depend on ttf_context?
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+           _Simple Example_?
+
+$font-size: 22
+$color:#33AA33
+                                                        /// Added lifetime annotation.
+$color:#3333AA
+                                                        struct SDL2GraphicsContext<'ttf> {
+$color:#33AA33
+                                                            window_canvas : SDL2WindowCanvas,
+$color:#3333AA
+                                                            ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
+$color:#33AA33
+                                                            font_assets : HashMap<String, SDL2FontAsset>,
+                                                        }
+$color:#666666
+$font-size: 30
+                            Well, the lifetime of the reference is quite simply, just
+                            the lifetime of the object we're referencing.
+
+                            That's obvious right?
+                            Who needed to know that?
+$end_page
+
+$page
+$color:#444444
+$font-size: 80
+           _Simple Example_?
+
+$font-size: 22
+$color:#33AA33
+                                                        /// Added lifetime annotation.
+                                                        struct SDL2GraphicsContext<'ttf> {
+                                                            window_canvas : SDL2WindowCanvas,
+                                                            ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
+$color:#3333AA
+                                                            font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
+$color:#33AA33
+                                                        }
+$color:#666666
+$font-size: 30
+                            Well, we need the ttf context to render text...
+                            So it would be obvious that our font assets depend
+                            on our ttf context, to hold font information for drawing.
+
+                            That was pretty easy. Albeit ugly.
+$end_page
+
+$page
 $color:#000000
 $font-size: 80
-     REASONS TO USE THIS:
+     _Why should you use it_?
 
 $color:#555555
 $font-size: 35
@@ -68,8 +260,6 @@ $color:#888888
 $end_page
 
 $page
-$background_color:#FFFFFF
-# $align:center
 $font-size: 72
 $color:#555555
 
