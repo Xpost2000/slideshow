@@ -6,7 +6,7 @@ $background_color:#FFFFFF
 $color:#000000
 $font-size: 84
 Hello World
-
+$$1000
 $font-size: 8
 Yep I know
 
@@ -48,6 +48,7 @@ $background_color:#FFFFFF
 $color:#000000
 $font-size: 80
      REASONS TO USE THIS:
+
 $color:#555555
 $font-size: 35
             - It's probably going to be F.O.S.S.
@@ -60,6 +61,7 @@ $font-size: 35
 $font-size: 16
 $color:#888888
                                (Don't like typing? Ask a friend to code a WYSIWYG editor :))
+                               (easy commands! $reset, $background-color, basically whatever you see as css?)
 $color:#555555
 $font-size: 35
             - It's made in *Rust.*

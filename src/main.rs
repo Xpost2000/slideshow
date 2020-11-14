@@ -179,7 +179,7 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
                 match special_character(character) {
                     Some(character) => {
                         match character {
-                            '$' => { panic!("error?"); },
+                            '$' => { return None; },
                             '\"' => {
                                 let start = index+1;
                                 let end : Option<usize> = line[start..].find('\"');
@@ -336,10 +336,16 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
             }
         } else {
             if line.len() >= 1 {
-                println!("plain text: {}", line);
                 new_page.text_elements.push(TextElement{x: 0.0,
                                                         y: current_line as f32,
-                                                        text: String::from(line),
+                                                        text: String::from(
+                                                            // VERY BAD STRING ESCAPE FOR NOW.
+                                                            if let Some('$') = line.chars().nth(0) {
+                                                                &line[1..]
+                                                            } else {
+                                                                &line
+                                                            }
+                                                        ),
                                                         font_size: context.current_font_size,
                                                         color: context.current_element_color});
                 current_line = 0;
