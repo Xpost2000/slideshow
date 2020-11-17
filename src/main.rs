@@ -576,17 +576,6 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
 }
 
 fn main() {
-    if false {
-        println!("Testing markup");
-        let source_test = "This is a *thing* Cool_right_ _sad _t t_";
-        let markup_lex = MarkupLexer::new(source_test);
-        for item in markup_lex {
-            println!("{:#?}", item);
-        }
-        let markup_lex = MarkupLexer::new(source_test);
-        println!("STITCHED TOGETHER STRING: {}", markup_lex.stitch());
-    }
-
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
     let video_subsystem = sdl2_context.video().unwrap();
 

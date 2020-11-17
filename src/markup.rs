@@ -28,6 +28,8 @@ pub fn is_whitespace(c: char) -> bool {
 impl<'a> MarkupLexer<'a> {
     // this is self consuming since the iterator
     // will be used up. Probably debugging stuff.
+    // It "renders" the text into a string. It removes all markup characters
+    // and returns plain text.
     pub fn stitch(self) -> String {
         let mut result = String::new();
         for item in self {
@@ -100,20 +102,26 @@ impl<'a> MarkupLexer<'a> {
         let mut sentence : String = String::new();
         let mut previous_character : Option<char> = None;
 
-        while let Some(&character) = self.peek_character() {
+        self.next_character();
+        while let Some(character) = self.next_character() {
             if character == to_match {
                 let good_match = 
                     if let Some(previous_character) = previous_character {
-                        if !is_whitespace(previous_character) {true} else {false}
+                        if !is_whitespace(previous_character) {
+                            true
+                        } else {
+                            false
+                        }
                     } else {
                         false
                     };
-                self.next_character();
-                return (sentence, good_match);
+
+                if good_match {
+                    return (sentence, good_match);
+                }
             }
             sentence.push(character);
             previous_character = Some(character);
-            self.next_character().unwrap();
         }
         (sentence, false)
     }
@@ -128,12 +136,14 @@ impl<'a> MarkupLexer<'a> {
 
         if let Some(&character) = self.peek_character() {
             if MarkupLexer::is_special_character(character) {
-                self.next_character();
-                if let (text_within_boundaries, true) = self.find_match_and_pass(character) {
-                    Some(MarkupLexer::find_type(character, text_within_boundaries))
-                } else {
-                    Some(Markup::Plain(string_prepend(&self.next_words_until_special(), character)))
-                }
+                let (text_within_boundaries, was_good_match) = self.find_match_and_pass(character);
+                Some(
+                    if was_good_match {
+                        MarkupLexer::find_type(character, text_within_boundaries)
+                    } else {
+                        Markup::Plain(string_prepend(&text_within_boundaries, character))
+                    }
+                )
             } else {
                 Some(Markup::Plain(self.next_words_until_special()))
             }
@@ -148,4 +158,49 @@ impl<'a> Iterator for MarkupLexer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.next_markup_item()
     }
+}
+
+/*
+I forgot MarkupLexer is an iterator, so my next best test is
+to use .stitch().
+*/
+#[cfg(test)]
+// #[test]
+fn very_simple_case_a() {
+    let source_test = "_t t_";
+    let markup_lex = MarkupLexer::new(source_test);
+    assert_eq!(markup_lex.stitch(), "t t");
+}
+// #[test]
+fn very_simple_case_b() {
+    let source_test = "+t t+";
+    let markup_lex = MarkupLexer::new(source_test);
+    assert_eq!(markup_lex.stitch(), "t t");
+}
+// #[test]
+fn simpler_case_a() {
+    let source_test = "a + b";
+    let markup_lex = MarkupLexer::new(source_test);
+    assert_eq!(markup_lex.stitch(), source_test);
+}
+#[test]
+fn simpler_case_b() {
+    let source_test = "_sad _t t_";
+    let markup_lex = MarkupLexer::new(source_test);
+    for item in markup_lex {
+        println!("{:?}", item);
+    }
+    let markup_lex = MarkupLexer::new(source_test);
+    assert_eq!(markup_lex.stitch(), "sad _t t");
+}
+// #[test]
+fn test_output() {
+    println!("Testing markup");
+    let source_test = "This is a *thing* Cool_right_ _sad _t t_ a + b!";
+    let markup_lex = MarkupLexer::new(source_test);
+    for item in markup_lex {
+        println!("{:?}", item);
+    }
+    let markup_lex = MarkupLexer::new(source_test);
+    assert_eq!(&markup_lex.stitch(), "This is a thing Cool_right_ _sad _t t_ a + b!");
 }

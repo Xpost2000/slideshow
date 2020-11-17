@@ -30,7 +30,7 @@ $color:#888888
         - LibreOffice Present
         - Microsoft Powerpoint
         - Suckless SENT
-        - Or paint and Windows Picture Viewer
+        - Or paint + Windows Picture Viewer
 $end_page
 
 $page
@@ -56,7 +56,7 @@ $font-size: 24
 $color:#888888
 $font-size: 36
         - Suckless SENT
-        - Or paint and Windows Picture Viewer
+        - Or paint + Windows Picture Viewer
 $end_page
 
 $page
@@ -72,7 +72,7 @@ $color:#888888
         - +LibreOffice Present+
         - +Microsoft Powerpoint+
         - +Suckless SENT+
-        - +Or paint and Windows Picture Viewer+
+        - +Or paint + Windows Picture Viewer+
 $color:#444444
 $font-size: 24
                     While suckless software is great, as is evident I like being relatively
