@@ -2,7 +2,7 @@
 I know there's a way to do it with just &str and slices, but
 the iteration work! OMG it's so much.
 */
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Markup {
     Plain(String),
     Bold(String),
@@ -166,41 +166,40 @@ to use .stitch().
 */
 #[cfg(test)]
 #[test]
+// This could literally just be a macro...
+// but these are one off so whatever.
 fn very_simple_case_a() {
-    let source_test = "_t t_";
-    let markup_lex = MarkupLexer::new(source_test);
-    assert_eq!(markup_lex.stitch(), "t t");
+    let markup_lex = MarkupLexer::new("_t t_");
+    assert_eq!(vec![Markup::Underlined(String::from("t t"))],
+               markup_lex.collect::<Vec<Markup>>());
 }
 #[test]
 fn very_simple_case_b() {
-    let source_test = "+t t+";
-    let markup_lex = MarkupLexer::new(source_test);
-    assert_eq!(markup_lex.stitch(), "t t");
+    let markup_lex = MarkupLexer::new("+t t+");
+    assert_eq!(vec![Markup::Strikethrough(String::from("t t"))],
+               markup_lex.collect::<Vec<Markup>>());
 }
 #[test]
 fn simpler_case_a() {
-    let source_test = "a + b";
-    let markup_lex = MarkupLexer::new(source_test);
-    assert_eq!(markup_lex.stitch(), source_test);
+    let markup_lex = MarkupLexer::new("a + b");
+    assert_eq!(vec![Markup::Plain(String::from("a ")),
+                    Markup::Plain(String::from("+ b"))],
+               markup_lex.collect::<Vec<Markup>>());
 }
 #[test]
 fn simpler_case_b() {
-    let source_test = "_sad _t t_";
-    let markup_lex = MarkupLexer::new(source_test);
-    for item in markup_lex {
-        println!("{:?}", item);
-    }
-    let markup_lex = MarkupLexer::new(source_test);
-    assert_eq!(markup_lex.stitch(), "sad _t t");
+    let markup_lex = MarkupLexer::new("_sad _t t_");
+    assert_eq!(vec![Markup::Underlined(String::from("sad _t t"))],
+               markup_lex.collect::<Vec<Markup>>());
 }
 #[test]
 fn test_output() {
-    println!("Testing markup");
-    let source_test = "This is a *thing* Cool_right_ _sad _t t_ a + b!";
-    let markup_lex = MarkupLexer::new(source_test);
-    for item in markup_lex {
-        println!("{:?}", item);
-    }
-    let markup_lex = MarkupLexer::new(source_test);
-    assert_eq!(&markup_lex.stitch(), "This is a thing Cool_right_ sad _t t a + b!");
+    let markup_lex = MarkupLexer::new("This is a *thing* Cool_right_ _sad _t t_ a + b!");
+    assert_eq!(vec![Markup::Plain(String::from("This is a ")),
+                    Markup::Bold(String::from("thing")),
+                    Markup::Plain(String::from(" Cool_right_ ")),
+                    Markup::Underlined(String::from("sad _t t")),
+                    Markup::Plain(String::from(" a ")),
+                    Markup::Plain(String::from("+ b!"))],
+               markup_lex.collect::<Vec<Markup>>());
 }
