@@ -165,19 +165,19 @@ I forgot MarkupLexer is an iterator, so my next best test is
 to use .stitch().
 */
 #[cfg(test)]
-// #[test]
+#[test]
 fn very_simple_case_a() {
     let source_test = "_t t_";
     let markup_lex = MarkupLexer::new(source_test);
     assert_eq!(markup_lex.stitch(), "t t");
 }
-// #[test]
+#[test]
 fn very_simple_case_b() {
     let source_test = "+t t+";
     let markup_lex = MarkupLexer::new(source_test);
     assert_eq!(markup_lex.stitch(), "t t");
 }
-// #[test]
+#[test]
 fn simpler_case_a() {
     let source_test = "a + b";
     let markup_lex = MarkupLexer::new(source_test);
@@ -193,7 +193,7 @@ fn simpler_case_b() {
     let markup_lex = MarkupLexer::new(source_test);
     assert_eq!(markup_lex.stitch(), "sad _t t");
 }
-// #[test]
+#[test]
 fn test_output() {
     println!("Testing markup");
     let source_test = "This is a *thing* Cool_right_ _sad _t t_ a + b!";
@@ -202,5 +202,5 @@ fn test_output() {
         println!("{:?}", item);
     }
     let markup_lex = MarkupLexer::new(source_test);
-    assert_eq!(&markup_lex.stitch(), "This is a thing Cool_right_ _sad _t t_ a + b!");
+    assert_eq!(&markup_lex.stitch(), "This is a thing Cool_right_ sad _t t a + b!");
 }
