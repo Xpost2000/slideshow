@@ -96,6 +96,7 @@ struct TextElement {
     text: String, // In the case I allow variables or something...
     color: Color,
     font_size: u16,
+    font_name: Option<String>,
 }
 #[derive(Debug)]
 struct Page {
@@ -128,6 +129,7 @@ struct SlideSettingsContext {
     current_background_color: Color,
     current_element_color: Color,
     current_font_size: u16,
+    current_font_path: Option<String>,
 }
 
 impl Default for SlideSettingsContext {
@@ -136,6 +138,7 @@ impl Default for SlideSettingsContext {
             current_background_color: COLOR_WHITE,
             current_element_color: COLOR_BLACK,
             current_font_size: 48,
+            current_font_path: None,
         }
     }
 }
@@ -149,7 +152,8 @@ struct SlideLineCommand <'a> {
 
 #[derive(Debug)]
 enum Command <'a> {
-    Reset,
+    Reset, // Total reset
+    ResetFont, // TODO think of better thing.
     SetFont(&'a str),
     SetBackgroundColor(Color),
     SetColor(Color),
@@ -297,6 +301,9 @@ fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>
                 None
             }
         }
+        "reset-font" => {
+            Some(Command::ResetFont)
+        }
         _ => { None },
     }
 }
@@ -307,6 +314,9 @@ fn execute_command(context: &mut SlideSettingsContext, command: Command) {
         Command::SetColor(color) => {context.current_element_color = color;},
         Command::SetBackgroundColor(color) => {context.current_background_color = color;},
         Command::SetFontSize(font_size) => {context.current_font_size = font_size;}
+        // the compiled slide should not depend on the source...
+        Command::SetFont(font_name) => {context.current_font_path = Some(font_name.to_owned());},
+        Command::ResetFont => {context.current_font_path = None;},
         _ => { println!("{:?} is an unknown command", command); }
     }
 }
@@ -323,8 +333,6 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
     let mut current_line : u32 = 0;
     let mut new_page : Page = Page::default();
 
-    // TODO: Account for dynamically sized text.
-    // println!("lines: {:?}", page_lines);
     for line in page_lines {
         if let Some(commands) = parse_slide_command(&line) {
             for command in commands {
@@ -347,6 +355,7 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
                                                             }
                                                         ),
                                                         font_size: context.current_font_size,
+                                                        font_name: context.current_font_path.clone(),
                                                         color: context.current_element_color});
                 current_line = 0;
             } else {
@@ -655,50 +664,56 @@ fn main() {
                     since the markup splits things into segments which to re-render the whole string
                     require a cursor, to render in the right place. Not a big issue though.
                     */
+                    let drawn_font =
+                        if let Some(font) = &text.font_name {
+                            graphics_context.add_font(font)
+                        } else {
+                            default_font 
+                        };
                     for markup in markup_lexer {
                         let mut width = 0;
                         match markup {
                             Markup::Plain(text_content) => {
-                                graphics_context.render_text(default_font,
+                                graphics_context.render_text(drawn_font,
                                                              cursor_x, cursor_y,
                                                              &text_content, font_size,
                                                              text.color,
                                                              FontStyle::NORMAL);
-                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
+                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
                             },
                             Markup::Strikethrough(text_content) => {
-                                graphics_context.render_text(default_font,
+                                graphics_context.render_text(drawn_font,
                                                              cursor_x, cursor_y,
                                                              &text_content, font_size,
                                                              text.color,
                                                              FontStyle::NORMAL);
-                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
+                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
                                 graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32 / 1.8), width as f32, font_size as f32 / 10.0, text.color);
                             },
                             Markup::Underlined(text_content) => {
-                                graphics_context.render_text(default_font,
+                                graphics_context.render_text(drawn_font,
                                                              cursor_x, cursor_y,
                                                              &text_content, font_size,
                                                              text.color,
                                                              FontStyle::NORMAL);
-                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
+                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
                                 graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32), width as f32, font_size as f32 / 13.0, text.color);
                             }
                             Markup::Bold(text_content) => {
-                                graphics_context.render_text(default_font,
+                                graphics_context.render_text(drawn_font,
                                                              cursor_x, cursor_y,
                                                              &text_content, font_size,
                                                              text.color,
                                                              FontStyle::BOLD);
-                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
+                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
                             },
                             Markup::Italics(text_content) => {
-                                graphics_context.render_text(default_font,
+                                graphics_context.render_text(drawn_font,
                                                              cursor_x, cursor_y,
                                                              &text_content, font_size,
                                                              text.color,
                                                              FontStyle::ITALIC);
-                                width = graphics_context.text_dimensions(default_font, &text_content, font_size).0;
+                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
                             },
                         }
                         cursor_x += width as f32;
