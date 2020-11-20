@@ -51,20 +51,39 @@ impl<'ttf> SDL2FontAsset<'ttf> {
     }
 }
 
-pub struct SDL2GraphicsContext<'ttf> {
+pub struct SDL2GraphicsContext<'sdl2, 'ttf> {
     window_canvas : SDL2WindowCanvas,
     ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
     font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
+    video_subsystem: &'sdl2 sdl2::VideoSubsystem,
 }
 
 // lots of interface and safety changes to be made.
-impl<'ttf> SDL2GraphicsContext<'ttf> {
-    pub fn new(window: sdl2::video::Window, ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext) -> SDL2GraphicsContext<'ttf> {
+impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
+    // this is technically an associated function
+    pub fn new(window: sdl2::video::Window,
+               ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
+               video_subsystem: &'sdl2 sdl2::VideoSubsystem) -> SDL2GraphicsContext<'sdl2, 'ttf> {
         SDL2GraphicsContext {
             window_canvas: window.into_canvas().build().unwrap(),
             ttf_context,
+            video_subsystem,
             font_assets: HashMap::new()
         }
+    }
+
+    pub fn get_avaliable_resolutions(&self) -> Vec<(i32, i32)> {
+        let mut resolutions : Vec<(i32, i32)> = Vec::new();
+        if let Ok(display_mode_count) = self.video_subsystem.num_display_modes(0) {
+            for index in 0..display_mode_count {
+                if let Ok(display_mode) = self.video_subsystem.display_mode(0, index) {
+                    resolutions.push((display_mode.w, display_mode.h));
+                }
+            }
+        }
+
+        resolutions.dedup();
+        resolutions
     }
 
     pub fn add_image<'a>(&mut self, image_file_name: &'a str) -> &'a str {
@@ -153,6 +172,10 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
         } else {
             (0, 0)
         }
+    }
+
+    pub fn render_image(&mut self, image_id: &str, x: f32, y: f32) {
+        unimplemented!("ASIDIOASDIOASDIO");
     }
 
     pub fn render_text(&mut self, font_id: &str, x: f32, y: f32, text: &str, font_size: u16, color: Color, style: sdl2::ttf::FontStyle) {

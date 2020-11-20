@@ -405,13 +405,17 @@ fn main() {
 
     const DEFAULT_WINDOW_WIDTH : u32 = 1280;
     const DEFAULT_WINDOW_HEIGHT : u32 = 720;
+    const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
     let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         .position_centered()
         .build()
         .expect("Window failed to open?");
 
-    let mut graphics_context = SDL2GraphicsContext::new(window, &sdl2_ttf_context);
+    let mut graphics_context = SDL2GraphicsContext::new(window, &sdl2_ttf_context, &video_subsystem);
     let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
+
+    let resolutions = graphics_context.get_avaliable_resolutions();
+    println!("{:?}", resolutions);
 
     let mut running = true;
     let mut event_pump = sdl2_context.event_pump().unwrap();
@@ -424,14 +428,14 @@ fn main() {
     let mut slideshow = Slide::new_from_file(
         match arguments.len() {
             1 => {
-                "test.slide"
+                DEFAULT_SLIDE_WHEN_NONE_GIVEN
             }
             2 => {
                 &arguments[1]
             },
             _ => {
                 println!("The only command line argument should be the slide file!");
-                "test.slide"
+                DEFAULT_SLIDE_WHEN_NONE_GIVEN
             }
         }
     );
@@ -497,7 +501,7 @@ fn main() {
                             default_font 
                         };
                     for markup in markup_lexer {
-                        let mut width = 0;
+                        let mut width;
                         match markup {
                             Markup::Plain(text_content) => {
                                 graphics_context.render_text(drawn_font,
