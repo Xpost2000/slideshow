@@ -22,13 +22,19 @@ pub fn remove_comments_from_source(source : &str) -> String {
     filtered
 }
 
-pub fn load_file(file_name: &str) -> String {
+pub fn load_file(file_name: &str) -> Result<String, &'static str> {
     use std::io::Read;
     use std::fs::File;
 
-    let mut result = String::new();
-    let mut slide_file = File::open(file_name)
-        .expect("There was an error in reading the file!");
-    slide_file.read_to_string(&mut result).expect("Unable to read into string");
-    result
+    match File::open(file_name) {
+        Ok(mut slide_file) => {
+            let mut result = String::new();
+            slide_file.read_to_string(&mut result)
+                .expect("Unable to read into string");
+            Ok(result)
+        },
+        Err(_) => {
+            Err("Bad file")
+        }
+    }
 }

@@ -46,7 +46,54 @@ impl Default for Page {
     }
 }
 
-type Slide = Vec<Page>;
+struct Slide {
+    file_name : String, // owned string for hot reloading.
+    pages : Vec<Page>,
+    current_page : isize,
+}
+
+impl Slide {
+    fn len(&self) -> usize {
+        self.pages.len()
+    }
+
+    fn get_current_page(&self) -> Option<&Page> {
+        self.get(self.current_page as usize)
+    }
+
+    fn get(&self, index: usize) -> Option<&Page> {
+        self.pages.get(index)
+    }
+
+    fn next_page(&mut self) {
+        self.current_page += 1;
+        self.current_page = clamp_i32(self.current_page as i32, 0, self.len() as i32) as isize;
+    }
+
+    fn previous_page(&mut self) {
+        self.current_page -= 1;
+        self.current_page = clamp_i32(self.current_page as i32, 0, self.len() as i32) as isize;
+    }
+
+    fn new_from_file(file_name: &str) -> Option<Slide> {
+        match load_file(file_name) {
+            Ok(file_source) => {
+                let slideshow_source = remove_comments_from_source(&file_source);
+                Some(
+                    Slide {
+                        file_name: file_name.to_owned(),
+                        pages: compile_slide_pages(&slideshow_source),
+                        current_page: 0
+                    }
+                )
+            },
+            Err(_) => {
+                None
+            }
+        }
+    }
+}
+// type Slide = Vec<Page>;
 /*
     stupid state machine
 */
@@ -292,8 +339,8 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
     new_page
 }
 
-fn compile_slide(slide_source : &String) -> Slide {
-    let mut slide = Slide::new();
+fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
+    let mut slide = Vec::new();
     let mut current_context = SlideSettingsContext::default();
     // The compiler "state" is "global" but I should probably reject
     // any text that isn't inside a currently compiled page...
@@ -350,12 +397,6 @@ fn compile_slide(slide_source : &String) -> Slide {
 use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
-fn load_slide_from_file(file_name: &str) -> Slide {
-    let slideshow_source = load_file(file_name);
-    let slideshow_source = remove_comments_from_source(&slideshow_source);
-    compile_slide(&slideshow_source)
-}
-
 fn main() {
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
     let video_subsystem = sdl2_context.video().unwrap();
@@ -382,7 +423,7 @@ fn main() {
 
     use std::env;
     let arguments : Vec<String> = env::args().collect();
-    let mut slideshow = load_slide_from_file(
+    let mut slideshow = Slide::new_from_file(
         match arguments.len() {
             1 => {
                 "test.slide"
@@ -392,7 +433,8 @@ fn main() {
             },
             _ => {
                 println!("The only command line argument should be the slide file!");
-                "test.slide"}
+                "test.slide"
+            }
         }
     );
 
@@ -401,22 +443,27 @@ fn main() {
             match event {
                 SDLEvent::Quit {..} | SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {running = false;},
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
-                    current_slide_index += 1;
+                    if let Some(slideshow) = &mut slideshow {
+                        slideshow.next_page();
+                    }
                 },
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
-                    current_slide_index -= 1;
+                    if let Some(slideshow) = &mut slideshow {
+                        slideshow.previous_page();
+                    }
                 },
                 _ => {}
             }
         }
 
-        current_slide_index = clamp_i32(current_slide_index as i32, 0, slideshow.len() as i32);
-        let current_slide : Option<&Page> = slideshow.get(current_slide_index as usize);
+        /*
+        While I don't explicitly need a state machine... It would probably be good practice
+        to do some for this.
+         */
         use sdl2::ttf::FontStyle;
-
-        if let Some(current_slide) = current_slide {
-            // rendering the slide
-            {
+        if let Some(slideshow) = &slideshow {
+            if let Some(current_slide) = slideshow.get_current_page() {
+                // rendering the slide
                 graphics_context.clear_color(current_slide.background_color);
 
                 let mut last_font_size : u16 = 0;
@@ -436,7 +483,7 @@ fn main() {
                     There is a slight chance of this being kept, so I'll just have to factor it later,
                     since the markup splits things into segments which to re-render the whole string
                     require a cursor, to render in the right place. Not a big issue though.
-                    */
+                     */
                     let drawn_font =
                         if let Some(font) = &text.font_name {
                             graphics_context.add_font(font)
@@ -495,15 +542,23 @@ fn main() {
                     cursor_y += (height as f32);
                     last_font_size = font_size;
                 }
+            } else {
+                graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", 48);
+                graphics_context.render_text(default_font,
+                                             ((DEFAULT_WINDOW_WIDTH as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((DEFAULT_WINDOW_HEIGHT as i32 / 2) - (height as i32) / 2) as f32,
+                                             "stupid slide needs pages... feed me", 48, COLOR_WHITE,
+                                             FontStyle::NORMAL);
             }
         } else {
-            graphics_context.clear_color(Color::new(10, 10, 16, 255));
-            let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", 48);
-            graphics_context.render_text(default_font,
-                                         ((DEFAULT_WINDOW_WIDTH as i32 / 2) - (width as i32) / 2) as f32,
-                                         ((DEFAULT_WINDOW_HEIGHT as i32 / 2) - (height as i32) / 2) as f32,
-                                         "stupid slide needs pages... feed me", 48, COLOR_WHITE,
-                                         FontStyle::NORMAL);
+                graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file.", 48);
+                graphics_context.render_text(default_font,
+                                             ((DEFAULT_WINDOW_WIDTH as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((DEFAULT_WINDOW_HEIGHT as i32 / 2) - (height as i32) / 2) as f32,
+                                             "Invalid / No slide file", 48, COLOR_WHITE,
+                                             FontStyle::NORMAL);
         }
 
         graphics_context.present();
