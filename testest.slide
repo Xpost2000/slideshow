@@ -1,5 +1,5 @@
 # Slide Format
-$font:"data/fonts/inconsolata/Inconsolata Regular.ttf" 
+$font:"data/fonts/inconsolata/Inconsolata-Regular.ttf" 
 
 $page
 $background_color:#FFFFFF

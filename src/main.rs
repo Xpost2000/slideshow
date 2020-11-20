@@ -350,6 +350,12 @@ fn compile_slide(slide_source : &String) -> Slide {
 use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
+fn load_slide_from_file(file_name: &str) -> Slide {
+    let slideshow_source = load_file(file_name);
+    let slideshow_source = remove_comments_from_source(&slideshow_source);
+    compile_slide(&slideshow_source)
+}
+
 fn main() {
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
     let video_subsystem = sdl2_context.video().unwrap();
@@ -370,15 +376,30 @@ fn main() {
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
     let mut current_slide_index : i32 = 0;
+    
+    // bad command line argument handling atm.
+    // Just filename or bust.
 
-    let slideshow_source = load_file("test.slide");
-    let slideshow_source = remove_comments_from_source(&slideshow_source);
-    let slideshow = compile_slide(&slideshow_source);
+    use std::env;
+    let arguments : Vec<String> = env::args().collect();
+    let mut slideshow = load_slide_from_file(
+        match arguments.len() {
+            1 => {
+                "test.slide"
+            }
+            2 => {
+                &arguments[1]
+            },
+            _ => {
+                println!("The only command line argument should be the slide file!");
+                "test.slide"}
+        }
+    );
 
     while running {
         for event in event_pump.poll_iter() {
             match event {
-                SDLEvent::Quit {..} =>  {running = false;},
+                SDLEvent::Quit {..} | SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {running = false;},
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
                     current_slide_index += 1;
                 },
