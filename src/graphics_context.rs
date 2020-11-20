@@ -67,6 +67,10 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
         }
     }
 
+    pub fn add_image<'a>(&mut self, image_file_name: &'a str) -> &'a str {
+        unimplemented!("add_image");
+        image_file_name
+    }
     pub fn add_font<'a>(&mut self, font_name: &'a str) -> &'a str {
         self.font_assets.insert(font_name.to_owned(),
                                 SDL2FontAsset::new_with_common_sizes(font_name.to_owned(), &self.ttf_context));
