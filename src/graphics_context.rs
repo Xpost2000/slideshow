@@ -73,6 +73,21 @@ impl<'ttf> SDL2GraphicsContext<'ttf> {
         font_name
     }
 
+    pub fn toggle_fullscreen(&mut self) {
+        use sdl2::video::FullscreenType;
+        let fullscreen_state = self.window().fullscreen_state();
+        let mut window = self.window_mut();
+
+        window.set_fullscreen(
+            match fullscreen_state {
+                FullscreenType::Off => {FullscreenType::True},
+                FullscreenType::True | FullscreenType::Desktop => {
+                    FullscreenType::Off
+                },
+            }
+        );
+    }
+
     pub fn window(&self) -> &sdl2::video::Window {
         self.window_canvas.window()
     }

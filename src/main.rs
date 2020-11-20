@@ -414,9 +414,7 @@ fn main() {
     let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
 
     let mut running = true;
-
     let mut event_pump = sdl2_context.event_pump().unwrap();
-    let mut current_slide_index : i32 = 0;
     
     // bad command line argument handling atm.
     // Just filename or bust.
@@ -441,7 +439,15 @@ fn main() {
     while running {
         for event in event_pump.poll_iter() {
             match event {
-                SDLEvent::Quit {..} | SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {running = false;},
+                SDLEvent::Quit {..} => {
+                    running = false;
+                },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
+                    slideshow = None;
+                },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
+                    graphics_context.toggle_fullscreen();
+                },
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
                     if let Some(slideshow) = &mut slideshow {
                         slideshow.next_page();
