@@ -2,7 +2,6 @@
     beginnings of a slideshow program?
 
 TODO: Please rewrite the tokenizer.
-TODO: Fix lifetimes...
 */
 mod markup;
 use self::markup::*;
@@ -418,11 +417,13 @@ fn main() {
     println!("{:?}", resolutions);
 
     let mut running = true;
+    // turn int ostate machine
+    let mut in_options_menu = false;
+    let mut currently_selected_resolution : usize = 0;
     let mut event_pump = sdl2_context.event_pump().unwrap();
-    
+
     // bad command line argument handling atm.
     // Just filename or bust.
-
     use std::env;
     let arguments : Vec<String> = env::args().collect();
     let mut slideshow = Slide::new_from_file(
@@ -441,6 +442,7 @@ fn main() {
     );
 
     while running {
+        let screen_resolution = graphics_context.resolution();
         for event in event_pump.poll_iter() {
             match event {
                 SDLEvent::Quit {..} => {
@@ -462,6 +464,29 @@ fn main() {
                         slideshow.previous_page();
                     }
                 },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Return), .. } =>  {
+                    if in_options_menu {
+                        let resolution_list = graphics_context.get_avaliable_resolutions();
+                        if let Some(resolution_pair) = resolution_list.get(currently_selected_resolution) {
+                            graphics_context.set_resolution((resolution_pair.0 as u32, resolution_pair.1 as u32));
+                        }
+                    }
+                },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
+                    if in_options_menu {
+                        if currently_selected_resolution > 0 {
+                            currently_selected_resolution -= 1;
+                        }
+                    }
+                },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
+                    if in_options_menu {
+                        currently_selected_resolution += 1;
+                    }
+                },
+                SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
+                    in_options_menu = !in_options_menu;
+                },
                 _ => {}
             }
         }
@@ -471,104 +496,149 @@ fn main() {
         to do some for this.
          */
         use sdl2::ttf::FontStyle;
-        if let Some(slideshow) = &slideshow {
-            if let Some(current_slide) = slideshow.get_current_page() {
-                // rendering the slide
-                graphics_context.clear_color(current_slide.background_color);
+        if in_options_menu {
+            graphics_context.clear_color(Color::new(10, 10, 16, 255));
+            let (width, height) = graphics_context.text_dimensions(default_font, "Resolution Select", 48);
+            graphics_context.render_text(default_font,
+                                         ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32, 0.0,
+                                         "Resolution Select", 48, COLOR_WHITE,
+                                         FontStyle::NORMAL);
+            let resolutions = graphics_context.get_avaliable_resolutions();
+            let resolution_count = resolutions.iter().count();
+            let resolutions_to_show = 8;
 
-                let mut last_font_size : u16 = 0;
-                let mut cursor_y : f32 = 0.0;
-                for text in &current_slide.text_elements {
-                    let font_size = text.font_size;
-                    let mut cursor_x : f32 = 0.0;
+            currently_selected_resolution = currently_selected_resolution.max(0);
+            currently_selected_resolution = currently_selected_resolution.min(resolution_count-1);
 
-                    let markup_lexer = MarkupLexer::new(&text.text);
-                    let (_, height) = graphics_context.text_dimensions(default_font, &text.text, font_size);
-                    // last_font_size should always be non-negative. If we don't have a last just
-                    // use the current font size (only for like the first line).
-                    if last_font_size == 0 { last_font_size = height as u16; }
-                    cursor_y += last_font_size as f32 * text.y;
-                    /*
-                    I want to remove this.
-                    There is a slight chance of this being kept, so I'll just have to factor it later,
-                    since the markup splits things into segments which to re-render the whole string
-                    require a cursor, to render in the right place. Not a big issue though.
-                     */
-                    let drawn_font =
-                        if let Some(font) = &text.font_name {
-                            graphics_context.add_font(font)
-                        } else {
-                            default_font 
-                        };
-                    for markup in markup_lexer {
-                        let mut width;
-                        match markup {
-                            Markup::Plain(text_content) => {
-                                graphics_context.render_text(drawn_font,
-                                                             cursor_x, cursor_y,
-                                                             &text_content, font_size,
-                                                             text.color,
-                                                             FontStyle::NORMAL);
-                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                            },
-                            Markup::Strikethrough(text_content) => {
-                                graphics_context.render_text(drawn_font,
-                                                             cursor_x, cursor_y,
-                                                             &text_content, font_size,
-                                                             text.color,
-                                                             FontStyle::NORMAL);
-                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32 / 1.8), width as f32, font_size as f32 / 10.0, text.color);
-                            },
-                            Markup::Underlined(text_content) => {
-                                graphics_context.render_text(drawn_font,
-                                                             cursor_x, cursor_y,
-                                                             &text_content, font_size,
-                                                             text.color,
-                                                             FontStyle::NORMAL);
-                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32), width as f32, font_size as f32 / 13.0, text.color);
+            let mut draw_cursor_y : f32 = 96.0;
+
+            for (index, resolution) in resolutions[currently_selected_resolution..
+                                                   (currently_selected_resolution+resolutions_to_show).min(resolution_count)].iter().enumerate() {
+                let is_selected = (index == 0);
+                let resolution_string =
+                    if is_selected {
+                        format!("* {} x {}", resolution.0, resolution.1)
+                    } else {
+                        format!("{} x {}", resolution.0, resolution.1)
+                    };
+                let (width, height) = graphics_context.text_dimensions(default_font, &resolution_string, 36);
+                graphics_context.render_text(default_font,
+                                             ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
+                                             draw_cursor_y,
+                                             &resolution_string,
+                                             if is_selected {
+                                                 48
+                                             } else {
+                                                 36
+                                             },
+                                             if is_selected {
+                                                COLOR_RIPE_LEMON 
+                                             } else {
+                                                 COLOR_WHITE
+                                             } ,
+                                             FontStyle::NORMAL);
+                draw_cursor_y += height as f32;
+            }
+        } else {
+            if let Some(slideshow) = &slideshow {
+                if let Some(current_slide) = slideshow.get_current_page() {
+                    // rendering the slide
+                    graphics_context.clear_color(current_slide.background_color);
+
+                    let mut last_font_size : u16 = 0;
+                    let mut cursor_y : f32 = 0.0;
+                    for text in &current_slide.text_elements {
+                        let font_size = text.font_size;
+                        let mut cursor_x : f32 = 0.0;
+
+                        let markup_lexer = MarkupLexer::new(&text.text);
+                        let (_, height) = graphics_context.text_dimensions(default_font, &text.text, font_size);
+                        // last_font_size should always be non-negative. If we don't have a last just
+                        // use the current font size (only for like the first line).
+                        if last_font_size == 0 { last_font_size = height as u16; }
+                        cursor_y += last_font_size as f32 * text.y;
+                        /*
+                        I want to remove this.
+                        There is a slight chance of this being kept, so I'll just have to factor it later,
+                        since the markup splits things into segments which to re-render the whole string
+                        require a cursor, to render in the right place. Not a big issue though.
+                         */
+                        let drawn_font =
+                            if let Some(font) = &text.font_name {
+                                graphics_context.add_font(font)
+                            } else {
+                                default_font 
+                            };
+                        for markup in markup_lexer {
+                            let mut width;
+                            match markup {
+                                Markup::Plain(text_content) => {
+                                    graphics_context.render_text(drawn_font,
+                                                                 cursor_x, cursor_y,
+                                                                 &text_content, font_size,
+                                                                 text.color,
+                                                                 FontStyle::NORMAL);
+                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
+                                },
+                                Markup::Strikethrough(text_content) => {
+                                    graphics_context.render_text(drawn_font,
+                                                                 cursor_x, cursor_y,
+                                                                 &text_content, font_size,
+                                                                 text.color,
+                                                                 FontStyle::NORMAL);
+                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
+                                    graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32 / 1.8), width as f32, font_size as f32 / 10.0, text.color);
+                                },
+                                Markup::Underlined(text_content) => {
+                                    graphics_context.render_text(drawn_font,
+                                                                 cursor_x, cursor_y,
+                                                                 &text_content, font_size,
+                                                                 text.color,
+                                                                 FontStyle::NORMAL);
+                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
+                                    graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32), width as f32, font_size as f32 / 13.0, text.color);
+                                }
+                                Markup::Bold(text_content) => {
+                                    graphics_context.render_text(drawn_font,
+                                                                 cursor_x, cursor_y,
+                                                                 &text_content, font_size,
+                                                                 text.color,
+                                                                 FontStyle::BOLD);
+                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
+                                },
+                                Markup::Italics(text_content) => {
+                                    graphics_context.render_text(drawn_font,
+                                                                 cursor_x, cursor_y,
+                                                                 &text_content, font_size,
+                                                                 text.color,
+                                                                 FontStyle::ITALIC);
+                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
+                                },
                             }
-                            Markup::Bold(text_content) => {
-                                graphics_context.render_text(drawn_font,
-                                                             cursor_x, cursor_y,
-                                                             &text_content, font_size,
-                                                             text.color,
-                                                             FontStyle::BOLD);
-                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                            },
-                            Markup::Italics(text_content) => {
-                                graphics_context.render_text(drawn_font,
-                                                             cursor_x, cursor_y,
-                                                             &text_content, font_size,
-                                                             text.color,
-                                                             FontStyle::ITALIC);
-                                width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                            },
+                            cursor_x += width as f32;
                         }
-                        cursor_x += width as f32;
-                    }
 
-                    cursor_y += (height as f32);
-                    last_font_size = font_size;
+                        cursor_y += (height as f32);
+                        last_font_size = font_size;
+                    }
+                } else {
+                    graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                    let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", 48);
+                    graphics_context.render_text(default_font,
+                                                 ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
+                                                 ((screen_resolution.1 as i32 / 2) - (height as i32) / 2) as f32,
+                                                 "stupid slide needs pages... feed me", 48, COLOR_WHITE,
+                                                 FontStyle::NORMAL);
                 }
             } else {
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", 48);
-                graphics_context.render_text(default_font,
-                                             ((DEFAULT_WINDOW_WIDTH as i32 / 2) - (width as i32) / 2) as f32,
-                                             ((DEFAULT_WINDOW_HEIGHT as i32 / 2) - (height as i32) / 2) as f32,
-                                             "stupid slide needs pages... feed me", 48, COLOR_WHITE,
-                                             FontStyle::NORMAL);
-            }
-        } else {
-                graphics_context.clear_color(Color::new(10, 10, 16, 255));
                 let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file.", 48);
                 graphics_context.render_text(default_font,
-                                             ((DEFAULT_WINDOW_WIDTH as i32 / 2) - (width as i32) / 2) as f32,
-                                             ((DEFAULT_WINDOW_HEIGHT as i32 / 2) - (height as i32) / 2) as f32,
+                                             ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((screen_resolution.1 as i32 / 2) - (height as i32) / 2) as f32,
                                              "Invalid / No slide file", 48, COLOR_WHITE,
                                              FontStyle::NORMAL);
+            }
         }
 
         graphics_context.present();

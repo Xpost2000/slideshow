@@ -96,6 +96,27 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
         font_name
     }
 
+    pub fn set_resolution(&mut self, resolution_pair: (u32, u32)) {
+        use sdl2::video::FullscreenType;
+        let fullscreen_state = self.window().fullscreen_state();
+        let mut window = self.window_mut();
+
+        window.set_size(resolution_pair.0, resolution_pair.1);
+        match fullscreen_state {
+            _ => {}
+            FullscreenType::True | FullscreenType::Desktop => {
+                let new_display_mode =
+                    sdl2::video::DisplayMode{
+                        w: resolution_pair.0 as i32,
+                        h: resolution_pair.1 as i32,
+                        .. window.display_mode().unwrap()
+                    };
+                println!("{:?}", new_display_mode);
+                window.set_display_mode(new_display_mode);
+            },
+        }
+    }
+
     pub fn toggle_fullscreen(&mut self) {
         use sdl2::video::FullscreenType;
         let fullscreen_state = self.window().fullscreen_state();
@@ -109,6 +130,18 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
                 },
             }
         );
+    }
+
+    pub fn screen_width(&self) -> u32 {
+        self.resolution().0
+    }
+
+    pub fn screen_height(&self) -> u32 {
+        self.resolution().1
+    }
+
+    pub fn resolution(&self) -> (u32, u32) {
+        self.window().size()
     }
 
     pub fn window(&self) -> &sdl2::video::Window {

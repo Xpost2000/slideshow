@@ -61,3 +61,4 @@ impl Color {
 }
 pub const COLOR_WHITE : Color = Color {r: 255, g: 255, b: 255, a: 255};
 pub const COLOR_BLACK : Color = Color {r: 0, g: 0, b: 0, a: 0};
+pub const COLOR_RIPE_LEMON : Color = Color {r: 247, g: 202, b: 24, a: 255};
