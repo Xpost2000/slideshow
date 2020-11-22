@@ -58,6 +58,7 @@ pub struct SDL2GraphicsContext<'sdl2, 'ttf> {
     video_subsystem: &'sdl2 sdl2::VideoSubsystem,
 }
 
+const DEFAULT_DPI : f32 = 72.0;
 // lots of interface and safety changes to be made.
 impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
     // this is technically an associated function
@@ -70,6 +71,10 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
             video_subsystem,
             font_assets: HashMap::new()
         }
+    }
+
+    fn get_display_dpi(&self) -> (f32, f32, f32) {
+        self.video_subsystem.display_dpi(0).unwrap()
     }
 
     pub fn get_avaliable_resolutions(&self) -> Vec<(i32, i32)> {
@@ -178,6 +183,7 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
 
     pub fn find_text_asset_by_size(&mut self, font_id: &str, font_size: u16) -> Option<&sdl2::ttf::Font<'ttf, 'static>> {
         let ttf_context = self.ttf_context;
+        let font_size : u16 = (font_size as f32 * (self.get_display_dpi().0 / DEFAULT_DPI)) as u16;
         let font_asset = self.get_font_asset_mut(font_id);
 
         if let Some(font_asset) = font_asset {
@@ -189,6 +195,7 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
 
     pub fn find_text_asset_by_size_mut(&mut self, font_id: &str, font_size: u16) -> Option<&mut sdl2::ttf::Font<'ttf, 'static>> {
         let ttf_context = self.ttf_context;
+        let font_size : u16 = (font_size as f32 * (self.get_display_dpi().0 / DEFAULT_DPI)) as u16;
         let font_asset = self.get_font_asset_mut(font_id);
 
         if let Some(font_asset) = font_asset {
