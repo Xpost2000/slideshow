@@ -58,7 +58,7 @@ pub struct SDL2GraphicsContext<'sdl2, 'ttf> {
     video_subsystem: &'sdl2 sdl2::VideoSubsystem,
 }
 
-const DEFAULT_DPI : f32 = 72.0;
+const DEFAULT_DPI : f32 = 96.0;
 // lots of interface and safety changes to be made.
 impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
     // this is technically an associated function
