@@ -410,15 +410,22 @@ fn main() {
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
     let video_subsystem = sdl2_context.video().unwrap();
 
-    let sdl2_ttf_context = sdl2::ttf::init().expect("SDL2 ttf failed to initialize?");
+    let sdl2_ttf_context = sdl2::ttf::init()
+        .expect("SDL2 ttf failed to initialize?");
+    let sdl2_image_context = sdl2::image::init(sdl2::image::InitFlag::PNG | sdl2::image::InitFlag::JPG)
+        .expect("SDL2 image failed to initialize?");
 
     let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         .position_centered()
         .build()
         .expect("Window failed to open?");
 
-    let mut graphics_context = SDL2GraphicsContext::new(window, &sdl2_ttf_context, &video_subsystem);
+    let mut graphics_context = SDL2GraphicsContext::new(window,
+                                                        &sdl2_ttf_context,
+                                                        &sdl2_image_context,
+                                                        &video_subsystem);
     let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
+    let dumb_test_texture = graphics_context.add_image("data/res/rust-logo-png-transparent.png");
 
     let resolutions = graphics_context.get_avaliable_resolutions();
     println!("{:?}", resolutions);
@@ -654,6 +661,11 @@ fn main() {
                                              font_size,
                                              COLOR_WHITE,
                                              FontStyle::NORMAL);
+
+                let (width, height) = graphics_context.image_dimensions(dumb_test_texture);
+                graphics_context.render_image(dumb_test_texture,
+                                              0.0, 0.0, (width / 4) as f32, (height / 4) as f32,
+                                              COLOR_WHITE);
             }
         }
 

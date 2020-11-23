@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies.sdl2]
 version = "0.34"
-features = ["ttf", "image"]
+features = ["ttf", "image", "unsafe_textures"]
 [dependencies]

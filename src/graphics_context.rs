@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use crate::Color;
 type SDL2WindowCanvas = sdl2::render::Canvas<sdl2::video::Window>;
+type SDL2WindowContextTextureCreator = sdl2::render::TextureCreator<sdl2::video::WindowContext>;
 // hashmaps of hashmaps?
 // Yeah this is not a good idea, but whatever for now.
 
@@ -51,25 +52,87 @@ impl<'ttf> SDL2FontAsset<'ttf> {
     }
 }
 
-pub struct SDL2GraphicsContext<'sdl2, 'ttf> {
+struct SDL2ImageTextureAsset {
+    texture: sdl2::render::Texture,
+}
+
+// https://github.com/Rust-SDL2/rust-sdl2/issues/351
+// ouch... uh it's a bit too late to fix this part...
+// I enabled ["unsafe_textures"] to circumvent this for now...
+impl SDL2ImageTextureAsset {
+    fn set_color(&mut self, color: Color) {
+        self.texture.set_color_mod(color.r, color.g, color.b);
+        self.texture.set_alpha_mod(color.a);
+    }
+
+    fn dimensions(&self) -> (u32, u32) {
+        use sdl2::render::TextureQuery;
+        let TextureQuery{ width, height, .. } = self.texture.query(); 
+        (width, height)
+    }
+}
+
+struct SDL2ImageTextureAssets {
+    texture_creator : SDL2WindowContextTextureCreator,
+    images : HashMap<String, SDL2ImageTextureAsset>,
+}
+
+impl SDL2ImageTextureAssets {
+    fn new(texture_creator: SDL2WindowContextTextureCreator) -> SDL2ImageTextureAssets {
+        SDL2ImageTextureAssets {
+            texture_creator,
+            images: HashMap::new()
+        }
+    }
+
+    fn get(&self, id: &str) -> Option<&SDL2ImageTextureAsset> {
+        self.images.get(id)
+    }
+
+    fn get_mut(&mut self, id: &str) -> Option<&mut SDL2ImageTextureAsset> {
+        self.images.get_mut(id)
+    }
+
+    fn insert(&mut self, path: &str) {
+        use sdl2::image::LoadSurface;
+        let surface_image = sdl2::surface::Surface::from_file(path).unwrap();
+
+        self.images.insert(path.to_owned(),
+                           SDL2ImageTextureAsset{
+                               texture: {
+                                   self.texture_creator.create_texture_from_surface(surface_image).unwrap()
+                               }
+                           });
+    }
+}
+
+pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     window_canvas : SDL2WindowCanvas,
     ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
-    font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
+    image_context : &'image sdl2::image::Sdl2ImageContext,
     video_subsystem: &'sdl2 sdl2::VideoSubsystem,
+
+    font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
+    image_assets : SDL2ImageTextureAssets,
 }
 
 const DEFAULT_DPI : f32 = 96.0;
 // lots of interface and safety changes to be made.
-impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
+impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     // this is technically an associated function
     pub fn new(window: sdl2::video::Window,
                ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
-               video_subsystem: &'sdl2 sdl2::VideoSubsystem) -> SDL2GraphicsContext<'sdl2, 'ttf> {
+               image_context : &'image sdl2::image::Sdl2ImageContext,
+               video_subsystem: &'sdl2 sdl2::VideoSubsystem) -> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
+        let window_canvas = window.into_canvas().build().unwrap();
+        let texture_creator = window_canvas.texture_creator();
         SDL2GraphicsContext {
-            window_canvas: window.into_canvas().build().unwrap(),
+            window_canvas,
             ttf_context,
+            image_context,
             video_subsystem,
-            font_assets: HashMap::new()
+            font_assets: HashMap::new(),
+            image_assets: SDL2ImageTextureAssets::new(texture_creator),
         }
     }
 
@@ -92,19 +155,20 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
     }
 
     pub fn add_image<'a>(&mut self, image_file_name: &'a str) -> &'a str {
-        unimplemented!("add_image");
+        self.image_assets.insert(image_file_name);
         image_file_name
     }
     pub fn add_font<'a>(&mut self, font_name: &'a str) -> &'a str {
         self.font_assets.insert(font_name.to_owned(),
-                                SDL2FontAsset::new_with_common_sizes(font_name.to_owned(), &self.ttf_context));
+                                SDL2FontAsset::new_with_common_sizes(font_name.to_owned(),
+                                                                     &self.ttf_context));
         font_name
     }
 
     pub fn set_resolution(&mut self, resolution_pair: (u32, u32)) {
         use sdl2::video::FullscreenType;
         let fullscreen_state = self.window().fullscreen_state();
-        let mut window = self.window_mut();
+        let window = self.window_mut();
 
         window.set_size(resolution_pair.0, resolution_pair.1);
         match fullscreen_state {
@@ -173,6 +237,14 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
         self.window_canvas.clear();
     }
 
+    pub fn get_image_asset(&self, texture_id: &str) -> Option<&SDL2ImageTextureAsset> {
+        self.image_assets.get(texture_id)
+    }
+
+    pub fn get_image_asset_mut(&mut self, texture_id: &str) -> Option<&mut SDL2ImageTextureAsset> {
+        self.image_assets.get_mut(texture_id)
+    }
+
     pub fn get_font_asset(&self, font_id: &str) -> Option<&SDL2FontAsset<'ttf>> {
         self.font_assets.get(font_id)
     } 
@@ -205,6 +277,11 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
         }
     }
 
+    // Please check for whether this image actually exists for real.
+    pub fn image_dimensions(&self, texture_image: &str) -> (u32, u32) {
+        self.get_image_asset(texture_image).unwrap().dimensions()
+    }
+
     pub fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
         if let Some(font_at_size) = self.find_text_asset_by_size(font_id, font_size) {
             let (width, height) = font_at_size.size_of(text).unwrap();
@@ -214,8 +291,27 @@ impl<'sdl2,'ttf> SDL2GraphicsContext<'sdl2, 'ttf> {
         }
     }
 
-    pub fn render_image(&mut self, image_id: &str, x: f32, y: f32) {
-        unimplemented!("ASIDIOASDIOASDIO");
+    pub fn render_image(&mut self, image_id: &str, x: f32, y: f32, w: f32, h: f32, color: Color) {
+        if let Some(texture) = self.get_image_asset_mut(image_id) {
+            texture.set_color(color);
+        }
+
+        /*
+           I'm fairly certain I don't have to do something like this... Should probably
+           google this further.
+         */
+        let &mut SDL2GraphicsContext { ref mut window_canvas, ref image_assets, .. } = self;
+        match image_assets.get(image_id) {
+            Some(texture) => {
+                let texture = &texture.texture;
+                window_canvas.copy(texture, None,
+                                   Some(sdl2::rect::Rect::new(x as i32,
+                                                              y as i32,
+                                                              w as u32,
+                                                              h as u32)));
+            },
+            None => {},
+        }
     }
 
     pub fn render_text(&mut self, font_id: &str, x: f32, y: f32, text: &str, font_size: u16, color: Color, style: sdl2::ttf::FontStyle) {
