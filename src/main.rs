@@ -396,15 +396,22 @@ fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
 use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
+const DEFAULT_WINDOW_WIDTH : u32 = 1280;
+const DEFAULT_WINDOW_HEIGHT : u32 = 720;
+const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
+
+// scaling reasons. Temporary...
+fn font_size_on_default_resolution(context: &SDL2GraphicsContext, font_size: u16) -> u16 {
+    let percent_scale = font_size as f32 / DEFAULT_WINDOW_HEIGHT as f32;
+    (context.screen_height() as f32 * percent_scale) as u16
+}
+
 fn main() {
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
     let video_subsystem = sdl2_context.video().unwrap();
 
     let sdl2_ttf_context = sdl2::ttf::init().expect("SDL2 ttf failed to initialize?");
 
-    const DEFAULT_WINDOW_WIDTH : u32 = 1280;
-    const DEFAULT_WINDOW_HEIGHT : u32 = 720;
-    const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
     let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         .position_centered()
         .build()
@@ -498,19 +505,19 @@ fn main() {
         use sdl2::ttf::FontStyle;
         if in_options_menu {
             graphics_context.clear_color(Color::new(10, 10, 16, 255));
-            let (width, height) = graphics_context.text_dimensions(default_font, "Resolution Select", 48);
+            let (width, heading_height) = graphics_context.text_dimensions(default_font, "Resolution Select", font_size_on_default_resolution(&graphics_context, 54));
             graphics_context.render_text(default_font,
                                          ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32, 0.0,
-                                         "Resolution Select", 48, COLOR_WHITE,
+                                         "Resolution Select", font_size_on_default_resolution(&graphics_context, 54), COLOR_WHITE,
                                          FontStyle::NORMAL);
             let resolutions = graphics_context.get_avaliable_resolutions();
             let resolution_count = resolutions.iter().count();
-            let resolutions_to_show = 8;
+            let resolutions_to_show = 8; 
 
             currently_selected_resolution = currently_selected_resolution.max(0);
             currently_selected_resolution = currently_selected_resolution.min(resolution_count-1);
 
-            let mut draw_cursor_y : f32 = 96.0;
+            let mut draw_cursor_y : f32 = (heading_height*2) as f32;
 
             for (index, resolution) in resolutions[currently_selected_resolution..
                                                    (currently_selected_resolution+resolutions_to_show).min(resolution_count)].iter().enumerate() {
@@ -521,18 +528,21 @@ fn main() {
                     } else {
                         format!("{} x {}", resolution.0, resolution.1)
                     };
-                let (width, height) = graphics_context.text_dimensions(default_font, &resolution_string, 36);
+                let font_size = 
+                    font_size_on_default_resolution(&graphics_context,
+                                                    if is_selected {
+                                                        48
+                                                    } else {
+                                                        36
+                                                    });
+                let (width, height) = graphics_context.text_dimensions(default_font, &resolution_string, font_size);
                 graphics_context.render_text(default_font,
                                              ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
                                              draw_cursor_y,
                                              &resolution_string,
+                                             font_size,
                                              if is_selected {
-                                                 48
-                                             } else {
-                                                 36
-                                             },
-                                             if is_selected {
-                                                COLOR_RIPE_LEMON 
+                                                 COLOR_RIPE_LEMON 
                                              } else {
                                                  COLOR_WHITE
                                              } ,
@@ -623,20 +633,26 @@ fn main() {
                     }
                 } else {
                     graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                    let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", 48);
+                    let font_size = font_size_on_default_resolution(&graphics_context, 48);
+                    let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", font_size);
                     graphics_context.render_text(default_font,
                                                  ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
                                                  ((screen_resolution.1 as i32 / 2) - (height as i32) / 2) as f32,
-                                                 "stupid slide needs pages... feed me", 48, COLOR_WHITE,
+                                                 "stupid slide needs pages... feed me",
+                                                 font_size,
+                                                 COLOR_WHITE,
                                                  FontStyle::NORMAL);
                 }
             } else {
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file.", 48);
+                let font_size = font_size_on_default_resolution(&graphics_context, 48);
+                let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file", font_size);
                 graphics_context.render_text(default_font,
                                              ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
                                              ((screen_resolution.1 as i32 / 2) - (height as i32) / 2) as f32,
-                                             "Invalid / No slide file", 48, COLOR_WHITE,
+                                             "Invalid / No slide file",
+                                             font_size,
+                                             COLOR_WHITE,
                                              FontStyle::NORMAL);
             }
         }
