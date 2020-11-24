@@ -323,10 +323,13 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 if font.get_style() != style {
                     font.set_style(style);
                 }
+                let font_surface = font.render(text)
+                    .blended(SDLColor::RGBA(255, 255, 255, 255))
+                    .expect("how did this go wrong?");
+
+                // TODO: Memory leak or something
                 let mut texture = texture_creator.create_texture_from_surface(
-                    &font.render(text)
-                        .blended(SDLColor::RGBA(255, 255, 255, 255))
-                        .expect("how did this go wrong?")
+                    &font_surface
                 ).expect("how did this go wrong?");
 
                 texture.set_color_mod(color.r, color.g, color.b);
@@ -334,6 +337,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
                 let sdl2::render::TextureQuery { width, height, .. } = texture.query();
                 self.window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new(x as i32, y as i32, width, height))).unwrap();
+
+                drop(texture);
             },
             None => {}
         }
