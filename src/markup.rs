@@ -103,13 +103,22 @@ impl<'a> MarkupLexer<'a> {
         let mut previous_character : Option<char> = None;
 
         self.next_character();
+
+        fn is_punctuation(c: char) -> bool {
+            match c {
+                '!'|'?'|'.'|';'|','|'\''|'\"' => { true },
+                _ => { false },
+            }
+        }
+
         while let Some(character) = self.next_character() {
             if character == to_match {
                 let good_match = 
                     if let Some(previous_character) = previous_character {
                         if !is_whitespace(previous_character) && character != previous_character {
                             if let Some(&next_character) = self.peek_character() {
-                                is_whitespace(next_character)
+                                // This will generally be correct?
+                                is_punctuation(next_character)
                             } else {
                                 true
                             }

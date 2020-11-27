@@ -14,7 +14,6 @@ $font-size: 48
                A stupid slideshow program in Rust,
                Yeah as of this version there's no layout
                or alignment, so it's done by hand :(
-               
 #               This is a *thing* Cool_right_ _sad _t t_ a + b!
 #               4 / 4 = 3 / 4
 #               _sad_sda_
