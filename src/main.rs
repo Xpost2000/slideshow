@@ -505,11 +505,6 @@ fn main() {
             }
         }
 
-        /*
-        While I don't explicitly need a state machine... It would probably be good practice
-        to do some for this.
-         */
-        use sdl2::ttf::FontStyle;
         if in_options_menu {
             graphics_context.logical_resolution = VirtualResolution::Display;
             graphics_context.clear_color(Color::new(10, 10, 16, 255));
@@ -569,75 +564,51 @@ fn main() {
                     let mut last_font_size : u16 = 0;
                     let mut cursor_y : f32 = 0.0;
                     graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
+
                     for text in &current_slide.text_elements {
                         let font_size = text.font_size;
                         let mut cursor_x : f32 = 0.0;
 
                         let markup_lexer = MarkupLexer::new(&text.text);
-                        let (_, height) = graphics_context.text_dimensions(default_font, &text.text, font_size);
-                        // last_font_size should always be non-negative. If we don't have a last just
-                        // use the current font size (only for like the first line).
-                        if last_font_size == 0 { last_font_size = height as u16; }
-                        cursor_y += last_font_size as f32 * text.y;
-                        /*
-                        I want to remove this.
-                        There is a slight chance of this being kept, so I'll just have to factor it later,
-                        since the markup splits things into segments which to re-render the whole string
-                        require a cursor, to render in the right place. Not a big issue though.
-                         */
                         let drawn_font =
                             if let Some(font) = &text.font_name {
                                 graphics_context.add_font(font)
                             } else {
                                 default_font 
                             };
+
+                        let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
+                        if last_font_size == 0 { last_font_size = height as u16; }
+                        cursor_y += last_font_size as f32 * text.y;
+
                         for markup in markup_lexer {
-                            let mut width;
+                            let text_content = markup.get_text_content();
+                            let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
+                            graphics_context.render_text(drawn_font,
+                                                         cursor_x, cursor_y,
+                                                         text_content,
+                                                         font_size,
+                                                         text.color,
+                                                         markup.get_text_drawing_style());
+                            // render decoration
                             match markup {
-                                Markup::Plain(text_content) => {
-                                    graphics_context.render_text(drawn_font,
-                                                                 cursor_x, cursor_y,
-                                                                 &text_content, font_size,
-                                                                 text.color,
-                                                                 FontStyle::NORMAL);
-                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                },
-                                Markup::Strikethrough(text_content) => {
-                                    graphics_context.render_text(drawn_font,
-                                                                 cursor_x, cursor_y,
-                                                                 &text_content, font_size,
-                                                                 text.color,
-                                                                 FontStyle::NORMAL);
-                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                    graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32 / 1.8), width as f32, font_size as f32 / 10.0, text.color);
-                                },
-                                Markup::Underlined(text_content) => {
-                                    graphics_context.render_text(drawn_font,
-                                                                 cursor_x, cursor_y,
-                                                                 &text_content, font_size,
-                                                                 text.color,
-                                                                 FontStyle::NORMAL);
-                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                    graphics_context.render_filled_rectangle(cursor_x, cursor_y + (font_size as f32), width as f32, font_size as f32 / 13.0, text.color);
+                                Markup::Strikethrough(_) => {
+                                    graphics_context.render_filled_rectangle(cursor_x,
+                                                                             cursor_y + (font_size as f32 / 1.8),
+                                                                             width as f32,
+                                                                             font_size as f32 / 10.0,
+                                                                             text.color);
                                 }
-                                Markup::Bold(text_content) => {
-                                    graphics_context.render_text(drawn_font,
-                                                                 cursor_x, cursor_y,
-                                                                 &text_content, font_size,
-                                                                 text.color,
-                                                                 FontStyle::BOLD);
-                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                },
-                                Markup::Italics(text_content) => {
-                                    graphics_context.render_text(drawn_font,
-                                                                 cursor_x, cursor_y,
-                                                                 &text_content, font_size,
-                                                                 text.color,
-                                                                 FontStyle::ITALIC);
-                                    width = graphics_context.text_dimensions(drawn_font, &text_content, font_size).0;
-                                },
+                                Markup::Underlined(_) => {
+                                    graphics_context.render_filled_rectangle(cursor_x,
+                                                                             cursor_y + (font_size as f32),
+                                                                             width as f32,
+                                                                             font_size as f32 / 13.0,
+                                                                             text.color);
+                                }
+                                _ => {},
                             }
-                            cursor_x += width as f32;
+                            cursor_x += (width) as f32;
                         }
 
                         cursor_y += (height as f32);
@@ -668,11 +639,6 @@ fn main() {
                                              font_size,
                                              COLOR_WHITE,
                                              FontStyle::NORMAL);
-
-                // let (width, height) = graphics_context.image_dimensions(dumb_test_texture);
-                // graphics_context.render_image(dumb_test_texture,
-                //                               0.0, 0.0, (width / 4) as f32, (height / 4) as f32,
-                //                               COLOR_WHITE);
             }
         }
 

@@ -3,12 +3,38 @@ I know there's a way to do it with just &str and slices, but
 the iteration work! OMG it's so much.
 */
 #[derive(Debug, PartialEq)]
+// should this just be a struct? They're all the same...
 pub enum Markup {
     Plain(String),
     Bold(String),
     Strikethrough(String),
     Italics(String),
     Underlined(String),
+}
+
+impl Markup {
+    // divorce this from sdl2?
+    pub fn get_text_drawing_style(&self) -> sdl2::ttf::FontStyle {
+        use sdl2::ttf::FontStyle;
+        match self {
+            Markup::Bold(_) => { FontStyle::BOLD },
+            Markup::Italics(_) => { FontStyle::ITALIC },
+            _ => { FontStyle::NORMAL },
+        }
+    }
+
+    pub fn get_text_content(&self) -> &str {
+        match self {
+            Markup::Plain(text_content)|
+            Markup::Bold(text_content)|
+            Markup::Strikethrough(text_content)|
+            Markup::Italics(text_content)|
+            Markup::Underlined(text_content) => {
+                &text_content
+            }
+            _ => { "" },
+        }
+    }
 }
 
 // I had to lookup a basic lexer in Rust... Cause holy s**t whatever I was
