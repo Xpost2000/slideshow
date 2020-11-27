@@ -107,8 +107,12 @@ impl<'a> MarkupLexer<'a> {
             if character == to_match {
                 let good_match = 
                     if let Some(previous_character) = previous_character {
-                        if !is_whitespace(previous_character) {
-                            true
+                        if !is_whitespace(previous_character) && character != previous_character {
+                            if let Some(&next_character) = self.peek_character() {
+                                is_whitespace(next_character)
+                            } else {
+                                true
+                            }
                         } else {
                             false
                         }
