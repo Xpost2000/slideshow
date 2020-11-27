@@ -11,6 +11,8 @@ mod graphics_context;
 use self::graphics_context::*;
 mod color;
 use self::color::*;
+mod slide_parser;
+use self::slide_parser::*;
 
 #[derive(Debug)]
 struct TextElement {
@@ -92,10 +94,6 @@ impl Slide {
         }
     }
 }
-// type Slide = Vec<Page>;
-/*
-    stupid state machine
-*/
 struct SlideSettingsContext {
     current_background_color: Color,
     current_element_color: Color,
@@ -170,6 +168,7 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
                     },
                     None => {
                         let start = index;
+                        // I feel like this loop can be replaced...
                         let end : Option<usize> =
                             loop {
                                 if let Some((index, character)) = char_iterator.next() {
@@ -198,10 +197,6 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
 
     let mut commands : Vec<SlideLineCommand> = Vec::new();
 
-    // No, actually it's just cause I want to write discount C, and
-    // Rust is making me realize why it's not a good idea...
-    /*TODO: Rust lexers are really painful with iterators... Oh god.*/
-    /*No support for compound commands yet.*/
     if tokenized_first_pass.len() >= 1 {
         let mut token_iterator = tokenized_first_pass.iter();
 
@@ -225,8 +220,6 @@ fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
             }
         }
     }
-
-    // println!("commands {:?}", commands);
 
     if commands.len() >= 1 {
         Some(commands)
@@ -315,19 +308,20 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
             }
         } else {
             if line.len() >= 1 {
-                new_page.text_elements.push(TextElement{x: 0.0,
-                                                        y: current_line as f32,
-                                                        text: String::from(
-                                                            // VERY BAD STRING ESCAPE FOR NOW.
-                                                            if let Some('$') = line.chars().nth(0) {
-                                                                &line[1..]
-                                                            } else {
-                                                                &line
-                                                            }
-                                                        ),
-                                                        font_size: context.current_font_size,
-                                                        font_name: context.current_font_path.clone(),
-                                                        color: context.current_element_color});
+                new_page.text_elements.push(TextElement{
+                    x: 0.0,
+                    y: current_line as f32,
+                    text: String::from(
+                        if let Some('$') = line.chars().nth(0) {
+                            &line[1..]
+                        } else {
+                            &line
+                        }
+                    ),
+                    font_size: context.current_font_size,
+                    font_name: context.current_font_path.clone(),
+                    color: context.current_element_color
+                });
                 current_line = 0;
             } else {
                 current_line += 1;
@@ -338,6 +332,25 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
     new_page
 }
 
+// aux function
+fn find_closing_command(line_iterator: &mut std::iter::Enumerate<std::str::Lines>, match_name: &str) -> Option<usize> {
+    loop {
+        let next = line_iterator.next();
+        match next {
+            Some((index, line)) => {
+                if let Some(commands) = parse_slide_command(&line) {
+                    if commands[0].name == match_name {
+                        break Some(index);
+                    }
+                }
+            },
+            None => {
+                break None;
+            }
+        }
+    }
+}
+
 fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
     let mut slide = Vec::new();
     let mut current_context = SlideSettingsContext::default();
@@ -346,25 +359,12 @@ fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
     // text outside of slides should be a warning though and should probably
     // just be treated like a comment.
     let mut line_iterator = slide_source.lines().enumerate();
+
     while let Some((index, line)) = line_iterator.next() {
         match parse_slide_command(&line) {
             Some(commands) => {
                 if commands[0].name == "page" {
-                    let end_page_index = loop {
-                        let next = line_iterator.next();
-                        match next {
-                            Some((index, line)) => {
-                                if let Some(commands) = parse_slide_command(&line) {
-                                    if commands[0].name == "end_page" {
-                                        break Some(index);
-                                    }
-                                }
-                            },
-                            None => {
-                                break None;
-                            }
-                        }
-                    };
+                    let end_page_index = find_closing_command(&mut line_iterator, "end_page");
 
                     if let Some(end_page_index) = end_page_index {
                         let index = index+1;
@@ -382,9 +382,6 @@ fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
                 }
             },
             None => {
-                // TODO Handle $$ escaping...
-                // Well actually it would probably work if I just made a custom format function
-                // that could handle the escaping for me.
                 println!("warning: Plain text should not be outside of a page!");
             },
         }
@@ -400,10 +397,293 @@ const DEFAULT_WINDOW_WIDTH : u32 = 1280;
 const DEFAULT_WINDOW_HEIGHT : u32 = 720;
 const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
 
-// scaling reasons. Temporary...
-fn font_size_on_default_resolution(context: &SDL2GraphicsContext, font_size: u16) -> u16 {
-    let percent_scale = font_size as f32 / DEFAULT_WINDOW_HEIGHT as f32;
-    (context.screen_height() as f32 * percent_scale) as u16
+#[derive(Clone, Copy)]
+enum ApplicationScreen {
+    InvalidOrNoSlide,
+    Options,
+    ShowingSlide,
+    SelectSlideToLoad,
+    Quit,
+}
+
+struct ApplicationState {
+    state: ApplicationScreen,
+
+    // options state,
+    currently_selected_resolution: usize,
+    // everything else I guess
+    slideshow: Option<Slide>,
+}
+
+impl ApplicationState {
+    fn new(command_line_arguments: &Vec<String>) -> ApplicationState {
+        ApplicationState {
+            state: ApplicationScreen::ShowingSlide,
+            currently_selected_resolution: 0,
+            slideshow:
+            Slide::new_from_file(
+                match command_line_arguments.len() {
+                    1 => {
+                        DEFAULT_SLIDE_WHEN_NONE_GIVEN
+                    }
+                    2 => {
+                        &command_line_arguments[1]
+                    },
+                    _ => {
+                        println!("The only command line argument should be the slide file!");
+                        DEFAULT_SLIDE_WHEN_NONE_GIVEN
+                    }
+                }
+            )
+        }
+    }
+
+    fn update(&mut self) {
+        match self.state {
+            ApplicationScreen::Quit | ApplicationScreen::InvalidOrNoSlide |
+            ApplicationScreen::Options => {},
+            ApplicationScreen::SelectSlideToLoad => {
+                self.state = ApplicationScreen::ShowingSlide;
+            },
+            ApplicationScreen::ShowingSlide => {
+                if let None = &self.slideshow {
+                    self.state = ApplicationScreen::InvalidOrNoSlide;
+                }
+            },
+        }
+    }
+
+    fn draw(&self, graphics_context: &mut SDL2GraphicsContext) {
+        let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
+        match self.state {
+            ApplicationScreen::Quit | ApplicationScreen::SelectSlideToLoad => {},
+            ApplicationScreen::InvalidOrNoSlide => {
+                graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                graphics_context.logical_resolution = VirtualResolution::Display;
+                let font_size = graphics_context.font_size_percent(0.073);
+                let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file", font_size);
+                graphics_context.render_text(default_font,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
+                                             "Invalid / No slide file",
+                                             font_size,
+                                             COLOR_WHITE,
+                                             sdl2::ttf::FontStyle::NORMAL);
+            },
+            ApplicationScreen::Options => {
+                graphics_context.logical_resolution = VirtualResolution::Display;
+                graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                let heading_font_size = graphics_context.font_size_percent(0.08);
+                let (width, heading_height) = graphics_context.text_dimensions(default_font, "Resolution Select", heading_font_size);
+                graphics_context.render_text(default_font,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                             0.0,
+                                             "Resolution Select",
+                                             heading_font_size,
+                                             COLOR_WHITE,
+                                             sdl2::ttf::FontStyle::NORMAL);
+                let resolutions = graphics_context.get_avaliable_resolutions();
+                let resolution_count = resolutions.iter().count();
+                let resolutions_to_show = 8; 
+
+                let mut draw_cursor_y : f32 = (heading_height*2) as f32;
+
+                for (index, resolution) in resolutions[self.currently_selected_resolution..
+                                                       (self.currently_selected_resolution+resolutions_to_show)
+                                                       .min(resolution_count)].iter().enumerate() {
+                    let is_selected = (index == 0);
+                    let resolution_string =
+                        if is_selected {
+                            format!("* {} x {}", resolution.0, resolution.1)
+                        } else {
+                            format!("{} x {}", resolution.0, resolution.1)
+                        };
+                    let font_size =
+                        if is_selected {
+                            graphics_context.font_size_percent(0.073)
+                        } else {
+                            graphics_context.font_size_percent(0.057)
+                        };
+                    let (width, height) = graphics_context.text_dimensions(default_font, &resolution_string, font_size);
+                    graphics_context.render_text(default_font,
+                                                 ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                                 draw_cursor_y,
+                                                 &resolution_string,
+                                                 font_size,
+                                                 if is_selected {
+                                                     COLOR_RIPE_LEMON 
+                                                 } else {
+                                                     COLOR_WHITE
+                                                 } ,
+                                                 sdl2::ttf::FontStyle::NORMAL);
+                    draw_cursor_y += height as f32;
+                }
+            },
+            ApplicationScreen::ShowingSlide => {
+                if let Some(slideshow) = &self.slideshow {
+                    if let Some(current_slide) = slideshow.get_current_page() {
+                        graphics_context.clear_color(current_slide.background_color);
+
+                        let mut last_font_size : u16 = 0;
+                        let mut cursor_y : f32 = 0.0;
+                        graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
+
+                        for text in &current_slide.text_elements {
+                            let font_size = text.font_size;
+                            let mut cursor_x : f32 = 0.0;
+
+                            let markup_lexer = MarkupLexer::new(&text.text);
+                            let drawn_font =
+                                if let Some(font) = &text.font_name {
+                                    graphics_context.add_font(font)
+                                } else {
+                                    default_font 
+                                };
+
+                            let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
+                            if last_font_size == 0 { last_font_size = height as u16; }
+                            cursor_y += last_font_size as f32 * text.y;
+
+                            for markup in markup_lexer {
+                                let text_content = markup.get_text_content();
+                                let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
+                                graphics_context.render_text(drawn_font,
+                                                             cursor_x, cursor_y,
+                                                             text_content,
+                                                             font_size,
+                                                             text.color,
+                                                             markup.get_text_drawing_style());
+                                // render decoration
+                                match markup {
+                                    Markup::Strikethrough(_) => {
+                                        graphics_context.render_filled_rectangle(cursor_x,
+                                                                                 cursor_y + (font_size as f32 / 1.8),
+                                                                                 width as f32,
+                                                                                 font_size as f32 / 10.0,
+                                                                                 text.color);
+                                    }
+                                    Markup::Underlined(_) => {
+                                        graphics_context.render_filled_rectangle(cursor_x,
+                                                                                 cursor_y + (font_size as f32),
+                                                                                 width as f32,
+                                                                                 font_size as f32 / 13.0,
+                                                                                 text.color);
+                                    }
+                                    _ => {},
+                                }
+                                cursor_x += (width) as f32;
+                            }
+
+                            cursor_y += (height as f32);
+                            last_font_size = font_size;
+                        }
+                    } else {
+                        graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                        graphics_context.logical_resolution = VirtualResolution::Display;
+                        let font_size = graphics_context.font_size_percent(0.073);
+                        let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", font_size);
+                        graphics_context.render_text(default_font,
+                                                     ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                                     ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
+                                                     "stupid slide needs pages... feed me",
+                                                     font_size,
+                                                     COLOR_WHITE,
+                                                     sdl2::ttf::FontStyle::NORMAL);
+                    }
+                }
+            },
+        }
+    }
+
+    fn handle_input(&mut self, graphics_context: &mut SDL2GraphicsContext, event_pump: &mut sdl2::EventPump) {
+        match self.state {
+            ApplicationScreen::Quit => {},
+            ApplicationScreen::SelectSlideToLoad => {},
+            ApplicationScreen::InvalidOrNoSlide => {
+                for event in event_pump.poll_iter() {
+                    match event {
+                        SDLEvent::Quit {..} => {
+                            self.state = ApplicationScreen::Quit;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
+                            self.state = ApplicationScreen::Quit;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
+                            self.state = ApplicationScreen::Options;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
+                            self.state = ApplicationScreen::SelectSlideToLoad;
+                        },
+                        _ => {}
+                    }
+                }
+            },
+            ApplicationScreen::Options => {
+                let resolutions = graphics_context.get_avaliable_resolutions();
+                let resolution_count = resolutions.iter().count();
+                self.currently_selected_resolution = self.currently_selected_resolution.max(0);
+                self.currently_selected_resolution = self.currently_selected_resolution.min(resolution_count-1);
+                for event in event_pump.poll_iter() {
+                    match event {
+                        SDLEvent::Quit {..} => {
+                            self.state = ApplicationScreen::Quit;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
+                            graphics_context.toggle_fullscreen();
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Return), .. } =>  {
+                            let resolution_list = graphics_context.get_avaliable_resolutions();
+                            if let Some(resolution_pair) = resolution_list.get(self.currently_selected_resolution) {
+                                graphics_context.set_resolution((resolution_pair.0 as u32, resolution_pair.1 as u32));
+                            }
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
+                            if self.currently_selected_resolution > 0 {
+                                self.currently_selected_resolution -= 1;
+                            }
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
+                            self.currently_selected_resolution += 1;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
+                            self.state = ApplicationScreen::ShowingSlide;
+                        },
+                        _ => {}
+                    }
+                }
+            },
+            ApplicationScreen::ShowingSlide => {
+                for event in event_pump.poll_iter() {
+                    match event {
+                        SDLEvent::Quit {..} => {
+                            self.state = ApplicationScreen::Quit;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
+                            self.slideshow = None;
+                            self.state = ApplicationScreen::InvalidOrNoSlide;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
+                            graphics_context.toggle_fullscreen();
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
+                            if let Some(slideshow) = &mut self.slideshow {
+                                slideshow.next_page();
+                            }
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
+                            if let Some(slideshow) = &mut self.slideshow {
+                                slideshow.previous_page();
+                            }
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
+                            self.state = ApplicationScreen::Options;
+                        },
+                        _ => {}
+                    }
+                }
+            },
+        }
+    }
 }
 
 fn main() {
@@ -425,223 +705,24 @@ fn main() {
                                                         &sdl2_image_context,
                                                         &video_subsystem);
     let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
-    let dumb_test_texture = graphics_context.add_image("data/res/rust-logo-png-transparent.png");
-
+    // let dumb_test_texture = graphics_context.add_image("data/res/rust-logo-png-transparent.png");
     let resolutions = graphics_context.get_avaliable_resolutions();
-    println!("{:?}", resolutions);
 
-    let mut running = true;
-    // turn int ostate machine
-    let mut in_options_menu = false;
-    let mut currently_selected_resolution : usize = 0;
     let mut event_pump = sdl2_context.event_pump().unwrap();
 
-    // bad command line argument handling atm.
-    // Just filename or bust.
     use std::env;
     let arguments : Vec<String> = env::args().collect();
-    let mut slideshow = Slide::new_from_file(
-        match arguments.len() {
-            1 => {
-                DEFAULT_SLIDE_WHEN_NONE_GIVEN
-            }
-            2 => {
-                &arguments[1]
-            },
-            _ => {
-                println!("The only command line argument should be the slide file!");
-                DEFAULT_SLIDE_WHEN_NONE_GIVEN
-            }
-        }
-    );
+    let mut application_state = ApplicationState::new(&arguments);
 
-    while running {
-        let screen_resolution = graphics_context.resolution();
-        for event in event_pump.poll_iter() {
-            match event {
-                SDLEvent::Quit {..} => {
-                    running = false;
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
-                    slideshow = None;
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
-                    graphics_context.toggle_fullscreen();
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
-                    if let Some(slideshow) = &mut slideshow {
-                        slideshow.next_page();
-                    }
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
-                    if let Some(slideshow) = &mut slideshow {
-                        slideshow.previous_page();
-                    }
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Return), .. } =>  {
-                    if in_options_menu {
-                        let resolution_list = graphics_context.get_avaliable_resolutions();
-                        if let Some(resolution_pair) = resolution_list.get(currently_selected_resolution) {
-                            graphics_context.set_resolution((resolution_pair.0 as u32, resolution_pair.1 as u32));
-                        }
-                    }
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
-                    if in_options_menu {
-                        if currently_selected_resolution > 0 {
-                            currently_selected_resolution -= 1;
-                        }
-                    }
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
-                    if in_options_menu {
-                        currently_selected_resolution += 1;
-                    }
-                },
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
-                    in_options_menu = !in_options_menu;
-                },
-                _ => {}
-            }
-        }
-
-        if in_options_menu {
-            graphics_context.logical_resolution = VirtualResolution::Display;
-            graphics_context.clear_color(Color::new(10, 10, 16, 255));
-            let heading_font_size = graphics_context.font_size_percent(0.08);
-            let (width, heading_height) = graphics_context.text_dimensions(default_font, "Resolution Select", heading_font_size);
-            graphics_context.render_text(default_font,
-                                         ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
-                                         0.0,
-                                         "Resolution Select",
-                                         heading_font_size,
-                                         COLOR_WHITE,
-                                         FontStyle::NORMAL);
-            let resolutions = graphics_context.get_avaliable_resolutions();
-            let resolution_count = resolutions.iter().count();
-            let resolutions_to_show = 8; 
-
-            currently_selected_resolution = currently_selected_resolution.max(0);
-            currently_selected_resolution = currently_selected_resolution.min(resolution_count-1);
-
-            let mut draw_cursor_y : f32 = (heading_height*2) as f32;
-
-            for (index, resolution) in resolutions[currently_selected_resolution..
-                                                   (currently_selected_resolution+resolutions_to_show).min(resolution_count)].iter().enumerate() {
-                let is_selected = (index == 0);
-                let resolution_string =
-                    if is_selected {
-                        format!("* {} x {}", resolution.0, resolution.1)
-                    } else {
-                        format!("{} x {}", resolution.0, resolution.1)
-                    };
-                let font_size =
-                    if is_selected {
-                        graphics_context.font_size_percent(0.073)
-                    } else {
-                        graphics_context.font_size_percent(0.057)
-                    };
-                let (width, height) = graphics_context.text_dimensions(default_font, &resolution_string, font_size);
-                graphics_context.render_text(default_font,
-                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
-                                             draw_cursor_y,
-                                             &resolution_string,
-                                             font_size,
-                                             if is_selected {
-                                                 COLOR_RIPE_LEMON 
-                                             } else {
-                                                 COLOR_WHITE
-                                             } ,
-                                             FontStyle::NORMAL);
-                draw_cursor_y += height as f32;
-            }
+    'running: loop {
+        if let ApplicationScreen::Quit = application_state.state {
+            break 'running;
         } else {
-            if let Some(slideshow) = &slideshow {
-                if let Some(current_slide) = slideshow.get_current_page() {
-                    // rendering the slide
-                    graphics_context.clear_color(current_slide.background_color);
+            application_state.handle_input(&mut graphics_context, &mut event_pump);
+            application_state.update();
+            application_state.draw(&mut graphics_context);
 
-                    let mut last_font_size : u16 = 0;
-                    let mut cursor_y : f32 = 0.0;
-                    graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
-
-                    for text in &current_slide.text_elements {
-                        let font_size = text.font_size;
-                        let mut cursor_x : f32 = 0.0;
-
-                        let markup_lexer = MarkupLexer::new(&text.text);
-                        let drawn_font =
-                            if let Some(font) = &text.font_name {
-                                graphics_context.add_font(font)
-                            } else {
-                                default_font 
-                            };
-
-                        let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
-                        if last_font_size == 0 { last_font_size = height as u16; }
-                        cursor_y += last_font_size as f32 * text.y;
-
-                        for markup in markup_lexer {
-                            let text_content = markup.get_text_content();
-                            let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
-                            graphics_context.render_text(drawn_font,
-                                                         cursor_x, cursor_y,
-                                                         text_content,
-                                                         font_size,
-                                                         text.color,
-                                                         markup.get_text_drawing_style());
-                            // render decoration
-                            match markup {
-                                Markup::Strikethrough(_) => {
-                                    graphics_context.render_filled_rectangle(cursor_x,
-                                                                             cursor_y + (font_size as f32 / 1.8),
-                                                                             width as f32,
-                                                                             font_size as f32 / 10.0,
-                                                                             text.color);
-                                }
-                                Markup::Underlined(_) => {
-                                    graphics_context.render_filled_rectangle(cursor_x,
-                                                                             cursor_y + (font_size as f32),
-                                                                             width as f32,
-                                                                             font_size as f32 / 13.0,
-                                                                             text.color);
-                                }
-                                _ => {},
-                            }
-                            cursor_x += (width) as f32;
-                        }
-
-                        cursor_y += (height as f32);
-                        last_font_size = font_size;
-                    }
-                } else {
-                    graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                    graphics_context.logical_resolution = VirtualResolution::Display;
-                    let font_size = graphics_context.font_size_percent(0.073);
-                    let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", font_size);
-                    graphics_context.render_text(default_font,
-                                                 ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
-                                                 ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
-                                                 "stupid slide needs pages... feed me",
-                                                 font_size,
-                                                 COLOR_WHITE,
-                                                 FontStyle::NORMAL);
-                }
-            } else {
-                graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                graphics_context.logical_resolution = VirtualResolution::Display;
-                let font_size = graphics_context.font_size_percent(0.073);
-                let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file", font_size);
-                graphics_context.render_text(default_font,
-                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
-                                             ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
-                                             "Invalid / No slide file",
-                                             font_size,
-                                             COLOR_WHITE,
-                                             FontStyle::NORMAL);
-            }
+            graphics_context.present();
         }
-
-        graphics_context.present();
     }
 }
