@@ -118,7 +118,7 @@ impl<'a> MarkupLexer<'a> {
                         if !is_whitespace(previous_character) && character != previous_character {
                             if let Some(&next_character) = self.peek_character() {
                                 // This will generally be correct?
-                                is_punctuation(next_character)
+                                is_punctuation(next_character) || is_whitespace(next_character)
                             } else {
                                 true
                             }
