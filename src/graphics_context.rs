@@ -315,19 +315,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         self.get_image_asset(texture_image).unwrap().dimensions()
     }
 
-    pub fn font_size_percent(&self, percent: f32) -> u16 {
-        (self.logical_height() as f32 * percent) as u16
-    }
-
-    pub fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
-        if let Some(font_at_size) = self.find_text_asset_by_size(font_id, font_size) {
-            let (width, height) = font_at_size.size_of(text).unwrap();
-            (width, height)
-        } else {
-            (0, 0)
-        }
-    }
-
     pub fn render_image(&mut self, image_id: &str, x: f32, y: f32, w: f32, h: f32, color: Color) {
         if let Some(texture) = self.get_image_asset_mut(image_id) {
             texture.set_color(color);
@@ -351,7 +338,23 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         }
     }
 
-    fn scale_xy_pair(&self, x: f32, y: f32) -> (f32, f32) {
+    // test?
+    pub fn _sdl2_scaling(&mut self) {
+        self.window_canvas.set_logical_size(self.logical_width(), self.logical_height());
+    }
+
+    fn scale_xy_pair_to_logical(&self, x: f32, y: f32) -> (f32, f32) {
+        ({
+            let percent = (x as f32) / (self.screen_width() as f32);
+            (percent * self.logical_width() as f32)
+         },
+         {
+            let percent = (y as f32) / (self.screen_height() as f32);
+            (percent * self.logical_height() as f32)
+         })
+    }
+
+    fn scale_xy_pair_to_real(&self, x: f32, y: f32) -> (f32, f32) {
         ({
             let percent = (x as f32) / (self.logical_width() as f32);
             (percent * self.screen_width() as f32)
@@ -362,16 +365,42 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
          })
     }
 
+    pub fn font_size_percent(&self, percent: f32) -> u16 {
+        (self.logical_height() as f32 * percent) as u16
+    }
+
+    // this is a literal text dimensions. This doesn't
+    // account for the virtual resolution system.
+    pub fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
+        if let Some(font_at_size) = self.find_text_asset_by_size(font_id, font_size) {
+            let (width, height) = font_at_size.size_of(text).unwrap();
+            (width, height)
+        } else {
+            (0, 0)
+        }
+    }
+
+    pub fn scale_font_size(&self, font_size: u16) -> u16 {
+        let percent = (font_size as f32) / (self.logical_height() as f32);
+        (percent * self.screen_height() as f32) as u16
+    }
+
+    // This will get the virtual resolution
+    pub fn logical_text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
+        let font_size = self.scale_font_size(font_size);
+        let result = self.text_dimensions(font_id, text, font_size);
+        let (w, h) = self.scale_xy_pair_to_logical(result.0 as f32, result.1 as f32);
+        (w as u32, h as u32)
+    }
+
     pub fn render_text(&mut self, font_id: &str, x: f32, y: f32, text: &str, font_size: u16, color: Color, style: sdl2::ttf::FontStyle) {
         let ttf_context = self.ttf_context;
         let texture_creator = self.window_canvas.texture_creator();
 
         // scale coordinates and such.
-        let font_size = {
-            let percent = (font_size as f32) / (self.logical_height() as f32);
-            (percent * self.screen_height() as f32) as u16
-        };
-        let (x, y) = self.scale_xy_pair(x, y);
+        let font_size = self.scale_font_size(font_size);
+
+        let (x, y) = self.scale_xy_pair_to_real(x, y);
 
         match self.find_text_asset_by_size_mut(font_id, font_size) {
             Some(font) => {
@@ -390,7 +419,10 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 texture.set_alpha_mod(color.a);
 
                 let sdl2::render::TextureQuery { width, height, .. } = texture.query();
-                self.window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new(x as i32, y as i32, width, height))).unwrap();
+                self.window_canvas.copy(&texture, None,
+                                        Some(sdl2::rect::Rect::new(x as i32,
+                                                                   y as i32,
+                                                                   width, height))).unwrap();
 
                 unsafe{texture.destroy();}
             },
@@ -407,8 +439,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 color.a
             )
         );
-        let (x, y) = self.scale_xy_pair(x, y);
-        let (w, h) = self.scale_xy_pair(w, h);
+        let (x, y) = self.scale_xy_pair_to_real(x, y);
+        let (w, h) = self.scale_xy_pair_to_real(w, h);
         self.window_canvas.fill_rect(sdl2::rect::Rect::new(x as i32, y as i32, w as u32, h as u32));
     }
 }
