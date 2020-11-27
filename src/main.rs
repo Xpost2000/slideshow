@@ -511,11 +511,16 @@ fn main() {
          */
         use sdl2::ttf::FontStyle;
         if in_options_menu {
+            graphics_context.logical_resolution = VirtualResolution::Display;
             graphics_context.clear_color(Color::new(10, 10, 16, 255));
-            let (width, heading_height) = graphics_context.text_dimensions(default_font, "Resolution Select", font_size_on_default_resolution(&graphics_context, 54));
+            let heading_font_size = graphics_context.font_size_percent(0.08);
+            let (width, heading_height) = graphics_context.text_dimensions(default_font, "Resolution Select", heading_font_size);
             graphics_context.render_text(default_font,
-                                         ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32, 0.0,
-                                         "Resolution Select", font_size_on_default_resolution(&graphics_context, 54), COLOR_WHITE,
+                                         ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                         0.0,
+                                         "Resolution Select",
+                                         heading_font_size,
+                                         COLOR_WHITE,
                                          FontStyle::NORMAL);
             let resolutions = graphics_context.get_avaliable_resolutions();
             let resolution_count = resolutions.iter().count();
@@ -535,16 +540,15 @@ fn main() {
                     } else {
                         format!("{} x {}", resolution.0, resolution.1)
                     };
-                let font_size = 
-                    font_size_on_default_resolution(&graphics_context,
-                                                    if is_selected {
-                                                        48
-                                                    } else {
-                                                        36
-                                                    });
+                let font_size =
+                    if is_selected {
+                        graphics_context.font_size_percent(0.073)
+                    } else {
+                        graphics_context.font_size_percent(0.057)
+                    };
                 let (width, height) = graphics_context.text_dimensions(default_font, &resolution_string, font_size);
                 graphics_context.render_text(default_font,
-                                             ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
                                              draw_cursor_y,
                                              &resolution_string,
                                              font_size,
@@ -564,6 +568,7 @@ fn main() {
 
                     let mut last_font_size : u16 = 0;
                     let mut cursor_y : f32 = 0.0;
+                    graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
                     for text in &current_slide.text_elements {
                         let font_size = text.font_size;
                         let mut cursor_x : f32 = 0.0;
@@ -640,11 +645,12 @@ fn main() {
                     }
                 } else {
                     graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                    let font_size = font_size_on_default_resolution(&graphics_context, 48);
+                    graphics_context.logical_resolution = VirtualResolution::Display;
+                    let font_size = graphics_context.font_size_percent(0.073);
                     let (width, height) = graphics_context.text_dimensions(default_font, "stupid slide needs pages... feed me", font_size);
                     graphics_context.render_text(default_font,
-                                                 ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
-                                                 ((screen_resolution.1 as i32 / 2) - (height as i32) / 2) as f32,
+                                                 ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                                 ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
                                                  "stupid slide needs pages... feed me",
                                                  font_size,
                                                  COLOR_WHITE,
@@ -652,20 +658,21 @@ fn main() {
                 }
             } else {
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                let font_size = font_size_on_default_resolution(&graphics_context, 48);
+                graphics_context.logical_resolution = VirtualResolution::Display;
+                let font_size = graphics_context.font_size_percent(0.073);
                 let (width, height) = graphics_context.text_dimensions(default_font, "Invalid / No slide file", font_size);
                 graphics_context.render_text(default_font,
-                                             ((screen_resolution.0 as i32 / 2) - (width as i32) / 2) as f32,
-                                             ((screen_resolution.1 as i32 / 2) - (height as i32) / 2) as f32,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
                                              "Invalid / No slide file",
                                              font_size,
                                              COLOR_WHITE,
                                              FontStyle::NORMAL);
 
-                let (width, height) = graphics_context.image_dimensions(dumb_test_texture);
-                graphics_context.render_image(dumb_test_texture,
-                                              0.0, 0.0, (width / 4) as f32, (height / 4) as f32,
-                                              COLOR_WHITE);
+                // let (width, height) = graphics_context.image_dimensions(dumb_test_texture);
+                // graphics_context.render_image(dumb_test_texture,
+                //                               0.0, 0.0, (width / 4) as f32, (height / 4) as f32,
+                //                               COLOR_WHITE);
             }
         }
 

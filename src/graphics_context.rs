@@ -1,3 +1,4 @@
+// TODO better interface for resolution independence?
 extern crate sdl2;
 
 use sdl2::pixels::Color as SDLColor;
@@ -106,6 +107,14 @@ impl SDL2ImageTextureAssets {
     }
 }
 
+#[derive(Clone,Copy)]
+// I would give this associated methods, but it's irrelevant
+// without a window.
+pub enum VirtualResolution {
+    Virtual(u32, u32),
+    Display,
+}
+
 pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     window_canvas : SDL2WindowCanvas,
     ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
@@ -114,6 +123,7 @@ pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
     font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
     image_assets : SDL2ImageTextureAssets,
+    pub logical_resolution : VirtualResolution,
 }
 
 const DEFAULT_DPI : f32 = 96.0;
@@ -133,6 +143,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             video_subsystem,
             font_assets: HashMap::new(),
             image_assets: SDL2ImageTextureAssets::new(texture_creator),
+            logical_resolution: VirtualResolution::Display,
         }
     }
 
@@ -199,6 +210,28 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 },
             }
         );
+    }
+
+    pub fn logical_width(&self) -> u32 {
+        match self.logical_resolution {
+            VirtualResolution::Display => {
+                self.screen_width()
+            },
+            VirtualResolution::Virtual(width, _) => {
+                width
+            }
+        }
+    }
+
+    pub fn logical_height(&self) -> u32 {
+        match self.logical_resolution {
+            VirtualResolution::Display => {
+                self.screen_height()
+            },
+            VirtualResolution::Virtual(_, height) => {
+                height
+            }
+        }
     }
 
     pub fn screen_width(&self) -> u32 {
@@ -282,6 +315,10 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         self.get_image_asset(texture_image).unwrap().dimensions()
     }
 
+    pub fn font_size_percent(&self, percent: f32) -> u16 {
+        (self.logical_height() as f32 * percent) as u16
+    }
+
     pub fn text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
         if let Some(font_at_size) = self.find_text_asset_by_size(font_id, font_size) {
             let (width, height) = font_at_size.size_of(text).unwrap();
@@ -314,9 +351,27 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         }
     }
 
+    fn scale_xy_pair(&self, x: f32, y: f32) -> (f32, f32) {
+        ({
+            let percent = (x as f32) / (self.logical_width() as f32);
+            (percent * self.screen_width() as f32)
+         },
+         {
+            let percent = (y as f32) / (self.logical_height() as f32);
+            (percent * self.screen_height() as f32)
+         })
+    }
+
     pub fn render_text(&mut self, font_id: &str, x: f32, y: f32, text: &str, font_size: u16, color: Color, style: sdl2::ttf::FontStyle) {
         let ttf_context = self.ttf_context;
         let texture_creator = self.window_canvas.texture_creator();
+
+        // scale coordinates and such.
+        let font_size = {
+            let percent = (font_size as f32) / (self.logical_height() as f32);
+            (percent * self.screen_height() as f32) as u16
+        };
+        let (x, y) = self.scale_xy_pair(x, y);
 
         match self.find_text_asset_by_size_mut(font_id, font_size) {
             Some(font) => {
@@ -338,7 +393,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 self.window_canvas.copy(&texture, None, Some(sdl2::rect::Rect::new(x as i32, y as i32, width, height))).unwrap();
 
                 unsafe{texture.destroy();}
-                // drop(texture);
             },
             None => {}
         }
@@ -353,6 +407,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 color.a
             )
         );
+        let (x, y) = self.scale_xy_pair(x, y);
+        let (w, h) = self.scale_xy_pair(w, h);
         self.window_canvas.fill_rect(sdl2::rect::Rect::new(x as i32, y as i32, w as u32, h as u32));
     }
 }
