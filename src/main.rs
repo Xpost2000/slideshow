@@ -47,17 +47,53 @@ impl Default for Page {
     }
 }
 
+enum SlideTransitionType {
+    HorizontalSlide,
+    VerticalSlide,
+    FadeTo(Color),
+}
+
+struct SlideTransition {
+    transition_type: SlideTransitionType, // type is keyword :(
+    time: f32,
+    finish_time: f32,
+}
+impl SlideTransition {
+    fn finished_transition(&self) -> bool {
+        self.time >= self.finish_time
+    }
+}
 struct Slide {
     file_name : String, // owned string for hot reloading.
     pages : Vec<Page>,
     current_page : isize,
+
+    transition : Option<SlideTransition>,
+}
+impl Default for Slide {
+    fn default() -> Slide {
+        Slide {
+            file_name: String::new(),
+            pages: Vec::new(),
+            // transition: None,
+            transition: Some(
+                SlideTransition {
+                    transition_type: SlideTransitionType::HorizontalSlide,
+                    time: 0.0,
+                    finish_time: 1.0
+                }),
+            current_page: isize::default(),
+        }
+    }
 }
 
 impl Slide {
     fn len(&self) -> usize {
         self.pages.len()
     }
-
+    fn current_page(&self) -> isize {
+        self.current_page
+    }
     fn get_current_page(&self) -> Option<&Page> {
         self.get(self.current_page as usize)
     }
@@ -66,14 +102,16 @@ impl Slide {
         self.pages.get(index)
     }
 
-    fn next_page(&mut self) {
+    fn next_page(&mut self) -> isize {
         self.current_page += 1;
         self.current_page = clamp_i32(self.current_page as i32, 0, self.len() as i32) as isize;
+        self.current_page
     }
 
-    fn previous_page(&mut self) {
+    fn previous_page(&mut self) -> isize {
         self.current_page -= 1;
         self.current_page = clamp_i32(self.current_page as i32, 0, self.len() as i32) as isize;
+        self.current_page
     }
 
     fn new_from_file(file_name: &str) -> Option<Slide> {
@@ -84,7 +122,8 @@ impl Slide {
                     Slide {
                         file_name: file_name.to_owned(),
                         pages: compile_slide_pages(&slideshow_source),
-                        current_page: 0
+                        current_page: 0,
+                        .. Slide::default()
                     }
                 )
             },
@@ -403,6 +442,7 @@ enum ApplicationScreen {
     Options,
     ShowingSlide,
     SelectSlideToLoad,
+    ChangePage(isize, isize),
     Quit,
 }
 
@@ -438,7 +478,7 @@ impl ApplicationState {
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, delta_time: f32) {
         match self.state {
             ApplicationScreen::Quit | ApplicationScreen::InvalidOrNoSlide |
             ApplicationScreen::Options => {},
@@ -448,6 +488,20 @@ impl ApplicationState {
             ApplicationScreen::ShowingSlide => {
                 if let None = &self.slideshow {
                     self.state = ApplicationScreen::InvalidOrNoSlide;
+                }
+            },
+            ApplicationScreen::ChangePage(first, second) => {
+                if let Some(slideshow) = &mut self.slideshow {
+                    if let None = slideshow.transition {
+                        self.state = ApplicationScreen::ShowingSlide;
+                    } else if let Some(transition) = &mut slideshow.transition {
+                        if !transition.finished_transition() {
+                            transition.time += delta_time;
+                        } else {
+                            self.state = ApplicationScreen::ShowingSlide;
+                            transition.time = 0.0;
+                        }
+                    }
                 }
             },
         }
@@ -518,6 +572,20 @@ impl ApplicationState {
                                                  sdl2::ttf::FontStyle::NORMAL);
                     draw_cursor_y += height as f32;
                 }
+            },
+            ApplicationScreen::ChangePage(first, second) => {
+                // unimplemented!("ChangePage");
+                graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                graphics_context.logical_resolution = VirtualResolution::Display;
+                let font_size = graphics_context.font_size_percent(0.083);
+                let (width, height) = graphics_context.text_dimensions(default_font, "CHANGE PAGE", font_size);
+                graphics_context.render_text(default_font,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                             ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
+                                             "CHANGE PAGE",
+                                             font_size,
+                                             COLOR_WHITE,
+                                             sdl2::ttf::FontStyle::NORMAL);
             },
             ApplicationScreen::ShowingSlide => {
                 if let Some(slideshow) = &self.slideshow {
@@ -652,6 +720,19 @@ impl ApplicationState {
                     }
                 }
             },
+            ApplicationScreen::ChangePage(_, _) => {
+                for event in event_pump.poll_iter() {
+                    match event {
+                        SDLEvent::Quit {..} => {
+                            self.state = ApplicationScreen::Quit;
+                        },
+                        SDLEvent::KeyDown {..} => {
+                            self.state = ApplicationScreen::ShowingSlide;
+                        },
+                        _ => {}
+                    }
+                }
+            }
             ApplicationScreen::ShowingSlide => {
                 for event in event_pump.poll_iter() {
                     match event {
@@ -667,12 +748,16 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                slideshow.next_page();
+                                // slideshow.next_page();
+                                self.state = ApplicationScreen::ChangePage(slideshow.current_page(),
+                                                                           slideshow.next_page());
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                slideshow.previous_page();
+                                // slideshow.previous_page();
+                                self.state = ApplicationScreen::ChangePage(slideshow.previous_page(),
+                                                                           slideshow.current_page());
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
@@ -714,15 +799,20 @@ fn main() {
     let arguments : Vec<String> = env::args().collect();
     let mut application_state = ApplicationState::new(&arguments);
 
+    let mut sdl2_timer = sdl2_context.timer().unwrap();
+    let mut delta_time = 0;
     'running: loop {
+        let start_time = sdl2_timer.ticks();
         if let ApplicationScreen::Quit = application_state.state {
             break 'running;
         } else {
             application_state.handle_input(&mut graphics_context, &mut event_pump);
-            application_state.update();
+            application_state.update(delta_time as f32 / 1000.0);
             application_state.draw(&mut graphics_context);
 
             graphics_context.present();
         }
+        let end_time = sdl2_timer.ticks();
+        delta_time = end_time - start_time;
     }
 }
