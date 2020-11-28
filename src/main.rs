@@ -55,12 +55,16 @@ enum SlideTransitionType {
 
 struct SlideTransition {
     transition_type: SlideTransitionType, // type is keyword :(
+    easing_function: EasingFunction,
     time: f32,
     finish_time: f32,
 }
 impl SlideTransition {
     fn finished_transition(&self) -> bool {
         self.time >= self.finish_time
+    }
+    fn easing_amount(&self) -> f32 {
+        self.easing_function.evaluate(0.0, 1.0, self.time/self.finish_time)
     }
 }
 struct Slide {
@@ -79,6 +83,7 @@ impl Default for Slide {
             transition: Some(
                 SlideTransition {
                     transition_type: SlideTransitionType::HorizontalSlide,
+                    easing_function: EasingFunction::Linear,
                     time: 0.0,
                     finish_time: 1.0
                 }),
@@ -643,29 +648,45 @@ impl ApplicationState {
             ApplicationScreen::ChangePage(first, second) => {
                 let slideshow = &self.slideshow.as_ref().unwrap();
                 if let Some(transition) = &slideshow.transition {
+                    let easing_amount = transition.easing_amount();
                     match transition.transition_type {
                         SlideTransitionType::HorizontalSlide => {
-                            let horizontal_scroll = lerp(0.0, 1.0, transition.time/transition.finish_time);
-                            // let horizontal_scroll = quadratic_ease_in(0.0, 1.0, transition.time/transition.finish_time);
-                            graphics_context.camera.y = 0.0;
-                            println!("f: {}, s: {}", first, second);
-
                             let forward_direction = second > first;
+                            graphics_context.camera.y = 0.0;
 
-                            graphics_context.camera.x = if forward_direction {
-                                0.0 - graphics_context.logical_width() as f32 * horizontal_scroll
-                            } else {
-                                0.0 + graphics_context.logical_width() as f32 * horizontal_scroll
-                            };
+                            graphics_context.camera.x =
+                                if forward_direction {
+                                    0.0 - graphics_context.logical_width() as f32 * easing_amount
+                                } else {
+                                    0.0 + graphics_context.logical_width() as f32 * easing_amount
+                                };
                             draw_slide_page(slideshow.get(first as usize).unwrap(), graphics_context, default_font);
-                            graphics_context.camera.x = if forward_direction {
-                                graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * horizontal_scroll)
-                            } else {
-                                -(graphics_context.logical_width() as f32) + (graphics_context.logical_width() as f32 * horizontal_scroll)
-                            };
+                            graphics_context.camera.x =
+                                if forward_direction {
+                                    graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * easing_amount)
+                                } else {
+                                    -(graphics_context.logical_width() as f32) + (graphics_context.logical_width() as f32 * easing_amount)
+                                };
                             draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
                         },
                         SlideTransitionType::VerticalSlide => {
+                            let forward_direction = second > first;
+                            graphics_context.camera.x = 0.0;
+
+                            graphics_context.camera.y =
+                                if forward_direction {
+                                    0.0 - graphics_context.logical_height() as f32 * easing_amount
+                                } else {
+                                    0.0 + graphics_context.logical_height() as f32 * easing_amount
+                                };
+                            draw_slide_page(slideshow.get(first as usize).unwrap(), graphics_context, default_font);
+                            graphics_context.camera.y =
+                                if forward_direction {
+                                    graphics_context.logical_height() as f32 - (graphics_context.logical_height() as f32 * easing_amount)
+                                } else {
+                                    -(graphics_context.logical_height() as f32) + (graphics_context.logical_height() as f32 * easing_amount)
+                                };
+                            draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
                         },
                         SlideTransitionType::FadeTo(Color) => {
                             // split time into two halves.

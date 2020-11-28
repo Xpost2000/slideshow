@@ -1,9 +1,10 @@
-enum EasingFunction {
-    CubicEaseIn(f32, f32, f32),
-    CubicEaseOut(f32, f32, f32),
-    QuadraticEaseIn(f32, f32, f32),
-    QuadraticEaseOut(f32, f32, f32),
-    Linear(f32, f32, f32),
+// to be serializable I guess...
+pub enum EasingFunction {
+    CubicEaseIn,
+    CubicEaseOut,
+    QuadraticEaseIn,
+    QuadraticEaseOut,
+    Linear,
 }
 pub fn cubic_ease_in(a: f32, b: f32, t: f32) -> f32 {
     b * t * t * t + a
@@ -23,13 +24,13 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 impl EasingFunction {
-    fn evaluate(&self) -> f32 {
+    pub fn evaluate(&self, a: f32, b: f32, t: f32) -> f32 {
         match *self {
-            EasingFunction::CubicEaseIn(a, b, t) => cubic_ease_in(a, b, t),
-            EasingFunction::CubicEaseOut(a, b, t) => cubic_ease_out(a, b, t),
-            EasingFunction::QuadraticEaseIn(a, b, t) => quadratic_ease_in(a, b, t),
-            EasingFunction::QuadraticEaseOut(a, b, t) => quadratic_ease_out(a, b, t),
-            EasingFunction::Linear(a, b, t) => lerp(a, b, t),
+            EasingFunction::CubicEaseIn => cubic_ease_in(a, b, t),
+            EasingFunction::CubicEaseOut => cubic_ease_out(a, b, t),
+            EasingFunction::QuadraticEaseIn => quadratic_ease_in(a, b, t),
+            EasingFunction::QuadraticEaseOut => quadratic_ease_out(a, b, t),
+            EasingFunction::Linear => lerp(a, b, t),
         }
     }
 }
