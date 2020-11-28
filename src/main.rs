@@ -14,7 +14,9 @@ use self::color::*;
 mod slide_parser;
 use self::slide_parser::*;
 
-#[derive(Debug)]
+use std::hash::{Hash, Hasher};
+
+#[derive(Debug, Clone)]
 struct TextElement {
     /*font?*/
     x: f32,
@@ -24,7 +26,20 @@ struct TextElement {
     font_size: u16,
     font_name: Option<String>,
 }
-#[derive(Debug)]
+impl Hash for TextElement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        fn canonicalize_position(e: &TextElement) -> (i32, i32) {
+            (e.x.round() as i32, e.y.round() as i32)
+        }
+
+        canonicalize_position(self).hash(state);
+        self.text.hash(state);
+        self.color.hash(state);
+        self.font_size.hash(state);
+        self.font_name.hash(state);
+    }
+}
+#[derive(Debug, Hash, Clone)]
 struct Page {
     background_color: Color,
     /*
@@ -69,6 +84,8 @@ impl SlideTransition {
 }
 struct Slide {
     file_name : String, // owned string for hot reloading.
+    last_modified_time: std::time::SystemTime,
+
     pages : Vec<Page>,
     current_page : isize,
 
@@ -88,11 +105,41 @@ impl Default for Slide {
                     finish_time: 1.0
                 }),
             current_page: isize::default(),
+            last_modified_time: std::time::SystemTime::now(),// eh...
         }
     }
 }
 
 impl Slide {
+    // handle errors more explictly...
+    fn file_last_modified_time(&self) -> std::time::SystemTime {
+        let metadata = std::fs::metadata(&self.file_name)
+            .expect("metadata retrieval failed... Deleted file?");
+        metadata.modified().expect("metadata modified time failed? No time?")
+    }
+    // will attempt to match to the appropriate page if possible.
+    // If it cannot determine that, it will just load to the front page.
+    fn reload(&mut self) -> Result<(), ()> {
+        // TODO: Different page counts and changed page?
+        // I think this has to be based on the delta between hashes
+        // but idk how Rust std hashes, or if that's even what I should be trying...
+        let previous_page_count = self.len();
+        let previous_current_page = self.current_page();
+
+        let new_slide = Slide::new_from_file(&self.file_name);
+        if let Some(slide) = new_slide {
+            if slide.last_modified_time > self.last_modified_time {
+                if previous_page_count == slide.len() {
+                    *self = slide;
+                    self.current_page = previous_current_page;
+                }
+            }
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
     fn len(&self) -> usize {
         self.pages.len()
     }
@@ -125,14 +172,15 @@ impl Slide {
         match load_file(file_name) {
             Ok(file_source) => {
                 let slideshow_source = remove_comments_from_source(&file_source);
-                Some(
-                    Slide {
-                        file_name: file_name.to_owned(),
-                        pages: compile_slide_pages(&slideshow_source),
-                        current_page: 0,
-                        .. Slide::default()
-                    }
-                )
+
+                let mut new_slide = Slide {
+                    file_name: file_name.to_owned(),
+                    pages: compile_slide_pages(&slideshow_source),
+                    current_page: 0,
+                    .. Slide::default()
+                };
+                new_slide.last_modified_time = new_slide.file_last_modified_time();
+                Some(new_slide)
             },
             Err(_) => {
                 None
@@ -428,7 +476,9 @@ fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
                 }
             },
             None => {
-                println!("warning: Plain text should not be outside of a page!");
+                if line.len() > 0 {
+                    println!("warning: Plain text should not be outside of a page!");
+                }
             },
         }
     }
@@ -453,11 +503,13 @@ enum ApplicationScreen {
     Quit,
 }
 
+const DEFAULT_LAST_WRITE_TIMER_INTERVAL : f32 = 0.20;
 struct ApplicationState {
     state: ApplicationScreen,
 
     // options state,
     currently_selected_resolution: usize,
+    last_write_timer: f32,
     // everything else I guess
     slideshow: Option<Slide>,
 }
@@ -467,6 +519,8 @@ impl ApplicationState {
         ApplicationState {
             state: ApplicationScreen::ShowingSlide,
             currently_selected_resolution: 0,
+            last_write_timer: 0.0,
+
             slideshow:
             Slide::new_from_file(
                 match command_line_arguments.len() {
@@ -486,6 +540,15 @@ impl ApplicationState {
     }
 
     fn update(&mut self, delta_time: f32) {
+        // TODO better timer and make it read based on last write/modified time...
+        if let Some(slideshow) = &mut self.slideshow {
+            if self.last_write_timer <= 0.0 {
+                self.last_write_timer = DEFAULT_LAST_WRITE_TIMER_INTERVAL;
+                slideshow.reload();
+            }
+        }
+        self.last_write_timer -= delta_time;
+
         match self.state {
             ApplicationScreen::Quit | ApplicationScreen::InvalidOrNoSlide |
             ApplicationScreen::Options => {},
@@ -817,6 +880,11 @@ impl ApplicationState {
                         #[cfg(debug_assertions)]
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
                             graphics_context.camera.scale -= 1.0 * delta_time;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::R), .. } => {
+                            if let Some(slideshow) = &mut self.slideshow {
+                                slideshow.reload();
+                            }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
