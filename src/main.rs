@@ -53,6 +53,15 @@ struct Page {
     text_elements: Vec<TextElement>,
 }
 
+impl Page {
+    fn calculate_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher_state = DefaultHasher::new();
+        self.hash(&mut hasher_state);
+        hasher_state.finish()
+    }
+}
+
 impl Default for Page {
     fn default() -> Page {
         Page {
@@ -117,12 +126,14 @@ impl Slide {
             .expect("metadata retrieval failed... Deleted file?");
         metadata.modified().expect("metadata modified time failed? No time?")
     }
-    // will attempt to match to the appropriate page if possible.
-    // If it cannot determine that, it will just load to the front page.
+    /*
+    This will load and keep the current page around something with a similar hash.
+    If it has the same page count it will reliably return the same page but modified.
+
+    The hash idea isn't very great, but might be okay if I replace it with a similarity
+    score system or something.
+     */
     fn reload(&mut self) -> Result<(), ()> {
-        // TODO: Different page counts and changed page?
-        // I think this has to be based on the delta between hashes
-        // but idk how Rust std hashes, or if that's even what I should be trying...
         let previous_page_count = self.len();
         let previous_current_page = self.current_page();
 
@@ -132,6 +143,27 @@ impl Slide {
                 if previous_page_count == slide.len() {
                     *self = slide;
                     self.current_page = previous_current_page;
+                } else {
+                    let current_page_hash = self.get_current_page()
+                        .expect("should have page...").calculate_hash();
+                    let mut hash_delta: u64 = std::u64::MAX;
+                    let mut closest_hash_and_index: (u64, usize) = (0, 0);
+                    for (index, page) in slide.pages.iter().enumerate() {
+                        let page_hash = page.calculate_hash();
+                        if page_hash == current_page_hash {
+                            closest_hash_and_index = (current_page_hash, index);
+                            break;
+                        } else {
+                            let min = std::cmp::min(page_hash, current_page_hash);
+                            let max = std::cmp::max(page_hash, current_page_hash);
+                            if (max - min) < hash_delta {
+                                hash_delta = max - min;
+                                closest_hash_and_index = (page_hash, index);
+                            }
+                        }
+                    }
+                    *self = slide;
+                    self.current_page = closest_hash_and_index.1 as isize;
                 }
             }
             Ok(())
