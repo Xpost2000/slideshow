@@ -115,6 +115,20 @@ pub enum VirtualResolution {
     Display,
 }
 
+#[derive(Copy, Clone)]
+pub struct Camera {
+    pub x: f32,
+    pub y: f32,
+    pub scale: f32,
+}
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            x: 0.0, y: 0.0,
+            scale: 1.0,
+        }
+    }
+}
 pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     window_canvas : SDL2WindowCanvas,
     ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
@@ -123,6 +137,8 @@ pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
     font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
     image_assets : SDL2ImageTextureAssets,
+    // camera should probably not be public?
+    pub camera: Camera,
     pub logical_resolution : VirtualResolution,
 }
 
@@ -143,6 +159,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             video_subsystem,
             font_assets: HashMap::new(),
             image_assets: SDL2ImageTextureAssets::new(texture_creator),
+            camera: Camera::default(),
             logical_resolution: VirtualResolution::Display,
         }
     }
@@ -398,9 +415,9 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         let texture_creator = self.window_canvas.texture_creator();
 
         // scale coordinates and such.
-        let font_size = self.scale_font_size(font_size);
-
-        let (x, y) = self.scale_xy_pair_to_real(x, y);
+        let font_size = self.scale_font_size((font_size as f32 * self.camera.scale) as u16);
+        let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
+                                                (y * self.camera.scale) + self.camera.y);
 
         match self.find_text_asset_by_size_mut(font_id, font_size) {
             Some(font) => {
@@ -422,7 +439,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 self.window_canvas.copy(&texture, None,
                                         Some(sdl2::rect::Rect::new(x as i32,
                                                                    y as i32,
-                                                                   width, height))).unwrap();
+                                                                   width,
+                                                                   height))).unwrap();
 
                 unsafe{texture.destroy();}
             },
@@ -439,8 +457,9 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 color.a
             )
         );
-        let (x, y) = self.scale_xy_pair_to_real(x, y);
-        let (w, h) = self.scale_xy_pair_to_real(w, h);
+        let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
+                                                (y * self.camera.scale) + self.camera.y);
+        let (w, h) = self.scale_xy_pair_to_real(w * self.camera.scale, h * self.camera.scale);
         self.window_canvas.fill_rect(sdl2::rect::Rect::new(x as i32, y as i32, w as u32, h as u32));
     }
 }

@@ -103,15 +103,17 @@ impl Slide {
     }
 
     fn next_page(&mut self) -> isize {
+        let desired_next_page = self.current_page + 1;
         self.current_page += 1;
         self.current_page = clamp_i32(self.current_page as i32, 0, self.len() as i32) as isize;
-        self.current_page
+        desired_next_page
     }
 
     fn previous_page(&mut self) -> isize {
+        let desired_next_page = self.current_page - 1;
         self.current_page -= 1;
         self.current_page = clamp_i32(self.current_page as i32, 0, self.len() as i32) as isize;
-        self.current_page
+        desired_next_page
     }
 
     fn new_from_file(file_name: &str) -> Option<Slide> {
@@ -492,10 +494,11 @@ impl ApplicationState {
             },
             ApplicationScreen::ChangePage(first, second) => {
                 if let Some(slideshow) = &mut self.slideshow {
+                    let valid_transition = slideshow.get(first as usize).is_some() && slideshow.get(second as usize).is_some();
                     if let None = slideshow.transition {
                         self.state = ApplicationScreen::ShowingSlide;
                     } else if let Some(transition) = &mut slideshow.transition {
-                        if !transition.finished_transition() {
+                        if valid_transition && !transition.finished_transition() {
                             transition.time += delta_time;
                         } else {
                             self.state = ApplicationScreen::ShowingSlide;
@@ -509,6 +512,67 @@ impl ApplicationState {
 
     fn draw(&self, graphics_context: &mut SDL2GraphicsContext) {
         let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
+
+        fn draw_slide_page(page: &Page,
+                           graphics_context: &mut SDL2GraphicsContext,
+                           default_font: &str) {
+            graphics_context.clear_color(page.background_color);
+
+            let mut last_font_size : u16 = 0;
+            let mut cursor_y : f32 = 0.0;
+            graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
+
+            for text in &page.text_elements {
+                let font_size = text.font_size;
+                let mut cursor_x : f32 = 0.0;
+
+                let markup_lexer = MarkupLexer::new(&text.text);
+                let drawn_font =
+                    if let Some(font) = &text.font_name {
+                        graphics_context.add_font(font)
+                    } else {
+                        default_font 
+                    };
+
+                let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
+                if last_font_size == 0 { last_font_size = height as u16; }
+                cursor_y += last_font_size as f32 * text.y;
+
+                for markup in markup_lexer {
+                    let text_content = markup.get_text_content();
+                    let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
+                    graphics_context.render_text(drawn_font,
+                                                 cursor_x, cursor_y,
+                                                 text_content,
+                                                 font_size,
+                                                 text.color,
+                                                 markup.get_text_drawing_style());
+                    // render decoration
+                    match markup {
+                        Markup::Strikethrough(_) => {
+                            graphics_context.render_filled_rectangle(cursor_x,
+                                                                     cursor_y + (font_size as f32 / 1.8),
+                                                                     width as f32,
+                                                                     font_size as f32 / 10.0,
+                                                                     text.color);
+                        }
+                        Markup::Underlined(_) => {
+                            graphics_context.render_filled_rectangle(cursor_x,
+                                                                     cursor_y + (font_size as f32),
+                                                                     width as f32,
+                                                                     font_size as f32 / 13.0,
+                                                                     text.color);
+                        }
+                        _ => {},
+                    }
+                    cursor_x += (width) as f32;
+                }
+
+                cursor_y += (height as f32);
+                last_font_size = font_size;
+            }
+        }
+
         match self.state {
             ApplicationScreen::Quit | ApplicationScreen::SelectSlideToLoad => {},
             ApplicationScreen::InvalidOrNoSlide => {
@@ -574,77 +638,32 @@ impl ApplicationState {
                 }
             },
             ApplicationScreen::ChangePage(first, second) => {
-                // unimplemented!("ChangePage");
-                graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                graphics_context.logical_resolution = VirtualResolution::Display;
-                let font_size = graphics_context.font_size_percent(0.083);
-                let (width, height) = graphics_context.text_dimensions(default_font, "CHANGE PAGE", font_size);
-                graphics_context.render_text(default_font,
-                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
-                                             ((graphics_context.logical_height() as i32 / 2) - (height as i32) / 2) as f32,
-                                             "CHANGE PAGE",
-                                             font_size,
-                                             COLOR_WHITE,
-                                             sdl2::ttf::FontStyle::NORMAL);
+                let slideshow = &self.slideshow.as_ref().unwrap();
+                if let Some(transition) = &slideshow.transition {
+                    match transition.transition_type {
+                        SlideTransitionType::HorizontalSlide => {
+                            let horizontal_scroll = lerp(0.0, 1.0, transition.time);
+                            graphics_context.camera.y = 0.0;
+
+                            graphics_context.camera.x = 0.0 - graphics_context.logical_width() as f32 * horizontal_scroll;
+                            draw_slide_page(slideshow.get(first as usize).unwrap(), graphics_context, default_font);
+                            graphics_context.camera.x = graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * horizontal_scroll);
+                            draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
+                        },
+                        SlideTransitionType::VerticalSlide => {
+                        },
+                        SlideTransitionType::FadeTo(Color) => {
+                            // split time into two halves.
+                        },
+                    }
+                }
             },
             ApplicationScreen::ShowingSlide => {
                 if let Some(slideshow) = &self.slideshow {
+                    graphics_context.camera.x = 0.0;
+                    graphics_context.camera.y = 0.0;
                     if let Some(current_slide) = slideshow.get_current_page() {
-                        graphics_context.clear_color(current_slide.background_color);
-
-                        let mut last_font_size : u16 = 0;
-                        let mut cursor_y : f32 = 0.0;
-                        graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
-
-                        for text in &current_slide.text_elements {
-                            let font_size = text.font_size;
-                            let mut cursor_x : f32 = 0.0;
-
-                            let markup_lexer = MarkupLexer::new(&text.text);
-                            let drawn_font =
-                                if let Some(font) = &text.font_name {
-                                    graphics_context.add_font(font)
-                                } else {
-                                    default_font 
-                                };
-
-                            let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
-                            if last_font_size == 0 { last_font_size = height as u16; }
-                            cursor_y += last_font_size as f32 * text.y;
-
-                            for markup in markup_lexer {
-                                let text_content = markup.get_text_content();
-                                let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
-                                graphics_context.render_text(drawn_font,
-                                                             cursor_x, cursor_y,
-                                                             text_content,
-                                                             font_size,
-                                                             text.color,
-                                                             markup.get_text_drawing_style());
-                                // render decoration
-                                match markup {
-                                    Markup::Strikethrough(_) => {
-                                        graphics_context.render_filled_rectangle(cursor_x,
-                                                                                 cursor_y + (font_size as f32 / 1.8),
-                                                                                 width as f32,
-                                                                                 font_size as f32 / 10.0,
-                                                                                 text.color);
-                                    }
-                                    Markup::Underlined(_) => {
-                                        graphics_context.render_filled_rectangle(cursor_x,
-                                                                                 cursor_y + (font_size as f32),
-                                                                                 width as f32,
-                                                                                 font_size as f32 / 13.0,
-                                                                                 text.color);
-                                    }
-                                    _ => {},
-                                }
-                                cursor_x += (width) as f32;
-                            }
-
-                            cursor_y += (height as f32);
-                            last_font_size = font_size;
-                        }
+                        draw_slide_page(current_slide, graphics_context, default_font);
                     } else {
                         graphics_context.clear_color(Color::new(10, 10, 16, 255));
                         graphics_context.logical_resolution = VirtualResolution::Display;
@@ -663,7 +682,7 @@ impl ApplicationState {
         }
     }
 
-    fn handle_input(&mut self, graphics_context: &mut SDL2GraphicsContext, event_pump: &mut sdl2::EventPump) {
+    fn handle_input(&mut self, graphics_context: &mut SDL2GraphicsContext, event_pump: &mut sdl2::EventPump, delta_time: f32) {
         match self.state {
             ApplicationScreen::Quit => {},
             ApplicationScreen::SelectSlideToLoad => {},
@@ -746,16 +765,26 @@ impl ApplicationState {
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
                             graphics_context.toggle_fullscreen();
                         },
+                        #[cfg(debug_assertions)]
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Num0), .. } => {
+                            graphics_context.camera.scale = 1.0;
+                        },
+                        #[cfg(debug_assertions)]
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
+                            graphics_context.camera.scale += 1.0 * delta_time;
+                        },
+                        #[cfg(debug_assertions)]
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
+                            graphics_context.camera.scale -= 1.0 * delta_time;
+                        },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                // slideshow.next_page();
                                 self.state = ApplicationScreen::ChangePage(slideshow.current_page(),
                                                                            slideshow.next_page());
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                // slideshow.previous_page();
                                 self.state = ApplicationScreen::ChangePage(slideshow.previous_page(),
                                                                            slideshow.current_page());
                             }
@@ -806,8 +835,9 @@ fn main() {
         if let ApplicationScreen::Quit = application_state.state {
             break 'running;
         } else {
-            application_state.handle_input(&mut graphics_context, &mut event_pump);
-            application_state.update(delta_time as f32 / 1000.0);
+            let delta_time = delta_time as f32 / 1000.0;
+            application_state.handle_input(&mut graphics_context, &mut event_pump, delta_time);
+            application_state.update(delta_time);
             application_state.draw(&mut graphics_context);
 
             graphics_context.present();

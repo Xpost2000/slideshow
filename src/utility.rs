@@ -1,3 +1,7 @@
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    (1.0 - t) * a + t * b
+}
+
 pub fn clamp_i32(x: i32, min: i32, max: i32) -> i32 {
     if x < min {
         min
