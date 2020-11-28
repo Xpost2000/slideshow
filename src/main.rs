@@ -516,7 +516,10 @@ impl ApplicationState {
         fn draw_slide_page(page: &Page,
                            graphics_context: &mut SDL2GraphicsContext,
                            default_font: &str) {
-            graphics_context.clear_color(page.background_color);
+            graphics_context.render_filled_rectangle(0.0, 0.0,
+                                                     graphics_context.logical_width() as f32,
+                                                     graphics_context.logical_height() as f32,
+                                                     page.background_color);
 
             let mut last_font_size : u16 = 0;
             let mut cursor_y : f32 = 0.0;
@@ -642,12 +645,24 @@ impl ApplicationState {
                 if let Some(transition) = &slideshow.transition {
                     match transition.transition_type {
                         SlideTransitionType::HorizontalSlide => {
-                            let horizontal_scroll = lerp(0.0, 1.0, transition.time);
+                            let horizontal_scroll = lerp(0.0, 1.0, transition.time/transition.finish_time);
+                            // let horizontal_scroll = quadratic_ease_in(0.0, 1.0, transition.time/transition.finish_time);
                             graphics_context.camera.y = 0.0;
+                            println!("f: {}, s: {}", first, second);
 
-                            graphics_context.camera.x = 0.0 - graphics_context.logical_width() as f32 * horizontal_scroll;
+                            let forward_direction = second > first;
+
+                            graphics_context.camera.x = if forward_direction {
+                                0.0 - graphics_context.logical_width() as f32 * horizontal_scroll
+                            } else {
+                                0.0 + graphics_context.logical_width() as f32 * horizontal_scroll
+                            };
                             draw_slide_page(slideshow.get(first as usize).unwrap(), graphics_context, default_font);
-                            graphics_context.camera.x = graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * horizontal_scroll);
+                            graphics_context.camera.x = if forward_direction {
+                                graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * horizontal_scroll)
+                            } else {
+                                -(graphics_context.logical_width() as f32) + (graphics_context.logical_width() as f32 * horizontal_scroll)
+                            };
                             draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
                         },
                         SlideTransitionType::VerticalSlide => {
@@ -747,6 +762,11 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown {..} => {
                             self.state = ApplicationScreen::ShowingSlide;
+                            if let Some(slideshow) = &mut self.slideshow {
+                                if let Some(transition) = &mut slideshow.transition {
+                                    transition.time = 0.0;
+                                }
+                            }
                         },
                         _ => {}
                     }
@@ -785,8 +805,8 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                self.state = ApplicationScreen::ChangePage(slideshow.previous_page(),
-                                                                           slideshow.current_page());
+                                self.state = ApplicationScreen::ChangePage(slideshow.current_page(),
+                                                                           slideshow.previous_page());
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
