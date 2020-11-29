@@ -541,8 +541,10 @@ const DEFAULT_LAST_WRITE_TIMER_INTERVAL : f32 = 0.20;
 struct ApplicationState {
     state: ApplicationScreen,
 
+    current_working_directory: String,
     // options state,
     currently_selected_resolution: usize,
+    currently_selected_directory: usize,
     last_write_timer: f32,
     // everything else I guess
     slideshow: Option<Slide>,
@@ -552,7 +554,9 @@ impl ApplicationState {
     fn new(command_line_arguments: &Vec<String>) -> ApplicationState {
         ApplicationState {
             state: ApplicationScreen::ShowingSlide,
+            current_working_directory: String::from("./"),
             currently_selected_resolution: 0,
+            currently_selected_directory: 0,
             last_write_timer: 0.0,
 
             slideshow:
@@ -587,7 +591,6 @@ impl ApplicationState {
             ApplicationScreen::Quit | ApplicationScreen::InvalidOrNoSlide |
             ApplicationScreen::Options => {},
             ApplicationScreen::SelectSlideToLoad => {
-                self.state = ApplicationScreen::ShowingSlide;
             },
             ApplicationScreen::ShowingSlide => {
                 if let None = &self.slideshow {
@@ -679,7 +682,69 @@ impl ApplicationState {
         }
 
         match self.state {
-            ApplicationScreen::Quit | ApplicationScreen::SelectSlideToLoad => {},
+            ApplicationScreen::Quit => {},
+            /*
+            TODO: I can see a way of refactoring this out
+            into a menu trait that depends on something that can turn into
+            an iterator.
+            
+            I don't need a real GUI or anything so this honestly works just fine, and probably just looks
+            plain nicer to have.
+             */
+            ApplicationScreen::SelectSlideToLoad => {
+                graphics_context.logical_resolution = VirtualResolution::Display;
+                graphics_context.clear_color(Color::new(10, 10, 16, 255));
+                let heading_font_size = graphics_context.font_size_percent(0.08);
+                let (width, heading_height) = graphics_context.text_dimensions(default_font, "Browse For Slide File(left arrow, for back)", heading_font_size);
+                graphics_context.render_text(default_font,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                             0.0,
+                                             "Browse For Slide File(left arrow, for back)",
+                                             heading_font_size,
+                                             COLOR_WHITE,
+                                             sdl2::ttf::FontStyle::NORMAL);
+
+                let directory_listing = std::fs::read_dir(&self.current_working_directory).expect("Failed to get directory listing?");
+                let mut draw_cursor_y : f32 = (heading_height*2) as f32;
+                let listings_to_show = 10;
+                graphics_context.render_filled_rectangle((((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
+                                                         draw_cursor_y-10.0,
+                                                         (graphics_context.logical_width()/2) as f32,
+                                                         listings_to_show as f32 * graphics_context.font_size_percent(0.06) as f32,
+                                                         Color::new(5, 5, 8, 255));
+                let directory_listing = directory_listing.into_iter();
+                for (index, path) in directory_listing.
+                    skip(self.currently_selected_directory)
+                    .take(listings_to_show)
+                    .enumerate() {
+                        let is_selected = (index == 0);
+                        let directory_string =
+                            if is_selected {
+                                format!("* {}", path.expect("bad permission?").path().display())
+                            } else {
+                                format!("{}", path.expect("bad permission?").path().display())
+                            };
+                        let font_size = graphics_context.font_size_percent(
+                            if is_selected {
+                                0.053
+                            } else {
+                                0.045
+                            });
+                        let (width, height) = graphics_context.text_dimensions(default_font, &directory_string, font_size);
+                        graphics_context.render_text(default_font,
+                                                     (((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
+                                                     draw_cursor_y,
+                                                     &directory_string,
+                                                     font_size,
+                                                     if is_selected {
+                                                         COLOR_RIPE_LEMON
+                                                     } else {
+                                                         COLOR_WHITE
+                                                     },
+                                                     sdl2::ttf::FontStyle::NORMAL);
+                        draw_cursor_y += height as f32;
+                    }
+            },
             ApplicationScreen::InvalidOrNoSlide => {
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
                 graphics_context.logical_resolution = VirtualResolution::Display;
@@ -841,7 +906,55 @@ impl ApplicationState {
     fn handle_input(&mut self, graphics_context: &mut SDL2GraphicsContext, event_pump: &mut sdl2::EventPump, delta_time: f32) {
         match self.state {
             ApplicationScreen::Quit => {},
-            ApplicationScreen::SelectSlideToLoad => {},
+            ApplicationScreen::SelectSlideToLoad => {
+                let directory_listing = std::fs::read_dir(&self.current_working_directory).expect("Failed to get directory listing?");
+                self.currently_selected_directory = self.currently_selected_directory.max(0);
+                self.currently_selected_directory = self.currently_selected_directory.min(directory_listing.into_iter().count()-1);
+                for event in event_pump.poll_iter() {
+                    match event {
+                        SDLEvent::Quit {..} => {
+                            self.state = ApplicationScreen::Quit;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Return), .. } |
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. }  =>  {
+                            let directory_listing = std::fs::read_dir(&self.current_working_directory).expect("Failed to get directory listing?");
+                            let selected_path = directory_listing.into_iter().nth(self.currently_selected_directory);
+                            if let Some(path) = selected_path {
+                                let path = path.expect("bad permission?");
+                                let file_type = path.file_type().unwrap();
+                                if file_type.is_dir() {
+                                    self.current_working_directory = path.path().to_str().expect("bad unicode").to_owned();
+                                    self.currently_selected_directory = 0;
+                                } else {
+                                    let new_slide = Slide::new_from_file(path.path().to_str().expect("bad unicode"));
+                                    self.slideshow = new_slide;
+
+                                    self.state = ApplicationScreen::ShowingSlide;
+                                }
+                            }
+                        },
+
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
+                            self.current_working_directory.push_str("../");
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
+                            if self.currently_selected_directory > 0 {
+                                self.currently_selected_directory -= 1;
+                            }
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
+                            self.currently_selected_directory += 1;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
+                            self.state = ApplicationScreen::Options;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
+                            self.state = ApplicationScreen::ShowingSlide;
+                        },
+                        _ => {}
+                    }
+                }
+            },
             ApplicationScreen::InvalidOrNoSlide => {
                 for event in event_pump.poll_iter() {
                     match event {
@@ -890,6 +1003,9 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
                             self.state = ApplicationScreen::ShowingSlide;
+                        },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
+                            self.state = ApplicationScreen::SelectSlideToLoad;
                         },
                         _ => {}
                     }
@@ -955,6 +1071,9 @@ impl ApplicationState {
                                                                            slideshow.previous_page());
                             }
                         },
+                        SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
+                            self.state = ApplicationScreen::SelectSlideToLoad;
+                        },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
                             self.state = ApplicationScreen::Options;
                         },
@@ -1012,6 +1131,7 @@ fn main() {
         graphics_context.present();
         let end_time = sdl2_timer.ticks();
         delta_time = end_time - start_time;
-        println!("{}", 1.0/(delta_time as f32/1000.0));
+        #[cfg(debug_assertions)]
+        {println!("{}", 1.0/(delta_time as f32/1000.0));}
     }
 }
