@@ -130,7 +130,7 @@ impl Default for Camera {
     }
 }
 pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
-    window_canvas : SDL2WindowCanvas,
+    pub window_canvas : SDL2WindowCanvas,
     ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
     image_context : &'image sdl2::image::Sdl2ImageContext,
     video_subsystem: &'sdl2 sdl2::VideoSubsystem,
@@ -150,8 +150,9 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
                image_context : &'image sdl2::image::Sdl2ImageContext,
                video_subsystem: &'sdl2 sdl2::VideoSubsystem) -> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
-        let window_canvas = window.into_canvas().build().unwrap();
+        let mut window_canvas = window.into_canvas().build().unwrap();
         let texture_creator = window_canvas.texture_creator();
+
         SDL2GraphicsContext {
             window_canvas,
             ttf_context,
@@ -162,6 +163,11 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             camera: Camera::default(),
             logical_resolution: VirtualResolution::Display,
         }
+    }
+
+    pub fn enable_alpha_blending(&mut self) {
+        self.window_canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
+
     }
 
     fn get_display_dpi(&self) -> (f32, f32, f32) {
@@ -432,6 +438,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                     &font_surface
                 ).expect("how did this go wrong?");
 
+                texture.set_blend_mode(sdl2::render::BlendMode::Blend);
                 texture.set_color_mod(color.r, color.g, color.b);
                 texture.set_alpha_mod(color.a);
 
@@ -441,8 +448,16 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                                                    y as i32,
                                                                    width,
                                                                    height))).unwrap();
-
-                unsafe{texture.destroy();}
+                {
+                    // wtf??????
+                    // I doubt this has anything to do with unsafe textures...
+                    // I know I shouldn't be rastering text on the fly, but I have no idea what
+                    // state I could have hit to cause this.
+                    // I'm going to try to unscrew this...
+                    self.window_canvas.set_draw_color(SDLColor::RGBA(0, 0, 0, 0));
+                    self.window_canvas.fill_rect(sdl2::rect::Rect::new(0, 0, 1, 1));
+                    unsafe{texture.destroy();}
+                }
             },
             None => {}
         }
@@ -454,7 +469,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 color.r,
                 color.g,
                 color.b,
-                color.a
+                color.a,
             )
         );
         let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,

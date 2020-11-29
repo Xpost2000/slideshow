@@ -108,7 +108,8 @@ impl Default for Slide {
             // transition: None,
             transition: Some(
                 SlideTransition {
-                    transition_type: SlideTransitionType::HorizontalSlide,
+                    // transition_type: SlideTransitionType::HorizontalSlide,
+                    transition_type: SlideTransitionType::FadeTo(COLOR_BLACK),
                     easing_function: EasingFunction::Linear,
                     time: 0.0,
                     finish_time: 1.0
@@ -617,6 +618,7 @@ impl ApplicationState {
         fn draw_slide_page(page: &Page,
                            graphics_context: &mut SDL2GraphicsContext,
                            default_font: &str) {
+            graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
             graphics_context.render_filled_rectangle(0.0, 0.0,
                                                      graphics_context.logical_width() as f32,
                                                      graphics_context.logical_height() as f32,
@@ -624,7 +626,6 @@ impl ApplicationState {
 
             let mut last_font_size : u16 = 0;
             let mut cursor_y : f32 = 0.0;
-            graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
 
             for text in &page.text_elements {
                 let font_size = text.font_size;
@@ -742,6 +743,7 @@ impl ApplicationState {
                 }
             },
             ApplicationScreen::ChangePage(first, second) => {
+                graphics_context.clear_color(Color::new(255, 0, 0, 255));
                 let slideshow = &self.slideshow.as_ref().unwrap();
                 if let Some(transition) = &slideshow.transition {
                     let easing_amount = transition.easing_amount();
@@ -785,9 +787,26 @@ impl ApplicationState {
                                 };
                             draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
                         },
-                        SlideTransitionType::FadeTo(Color) => {
+                        SlideTransitionType::FadeTo(color) => {
                             // split time into two halves.
-                            // let half_max_time = (transition.finish_time / 2);
+                            let half_max_time = (transition.finish_time / 2.0);
+                            let ease_function = transition.easing_function;
+                            let fraction_of_completion = transition.time/transition.finish_time;
+                            let (alpha, page_to_draw) = {
+                                if fraction_of_completion < 0.5 {
+                                    let ease_amount = ease_function.evaluate(0.0, 1.0, transition.time/half_max_time);
+                                    ((255 as f32 * ease_amount) as u8, first)
+                                } else {
+                                    let ease_amount = ease_function.evaluate(1.0, 0.0, (transition.time-half_max_time)/half_max_time);
+                                    ((255 as f32 * ease_amount) as u8, second)
+                                }
+                            };
+                            let color = Color{a: alpha, .. color};
+                            draw_slide_page(slideshow.get(page_to_draw as usize).unwrap(), graphics_context, default_font);
+                            graphics_context.render_filled_rectangle(0.0, 0.0,
+                                                                     graphics_context.logical_width() as f32,
+                                                                     graphics_context.logical_height() as f32,
+                                                                     color);
                         },
                     }
                 }
@@ -796,6 +815,7 @@ impl ApplicationState {
                 if let Some(slideshow) = &self.slideshow {
                     graphics_context.camera.x = 0.0;
                     graphics_context.camera.y = 0.0;
+                    // graphics_context.clear_color(Color::new(0, 0, 0, 255));
                     if let Some(current_slide) = slideshow.get_current_page() {
                         draw_slide_page(current_slide, graphics_context, default_font);
                     } else {
@@ -974,18 +994,20 @@ fn main() {
 
     let mut sdl2_timer = sdl2_context.timer().unwrap();
     let mut delta_time = 0;
+    graphics_context.enable_alpha_blending();
     'running: loop {
         let start_time = sdl2_timer.ticks();
+        graphics_context.clear_color(Color::new(0, 0, 0, 255));
         if let ApplicationScreen::Quit = application_state.state {
             break 'running;
         } else {
             let delta_time = delta_time as f32 / 1000.0;
+
             application_state.handle_input(&mut graphics_context, &mut event_pump, delta_time);
             application_state.update(delta_time);
             application_state.draw(&mut graphics_context);
-
-            graphics_context.present();
         }
+        graphics_context.present();
         let end_time = sdl2_timer.ticks();
         delta_time = end_time - start_time;
     }

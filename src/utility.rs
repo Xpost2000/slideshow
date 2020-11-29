@@ -1,4 +1,5 @@
 // to be serializable I guess...
+#[derive(Copy,Clone,Debug)]
 pub enum EasingFunction {
     CubicEaseIn,
     CubicEaseOut,
