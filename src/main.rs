@@ -795,13 +795,15 @@ impl ApplicationState {
                             let (alpha, page_to_draw) = {
                                 if fraction_of_completion < 0.5 {
                                     let ease_amount = ease_function.evaluate(0.0, 1.0, transition.time/half_max_time);
-                                    ((255 as f32 * ease_amount) as u8, first)
+                                    let alpha = 255 as f32 * ease_amount;
+                                    (if alpha < 0.0 { 0.0 } else { alpha } as u8, first)
                                 } else {
                                     let ease_amount = ease_function.evaluate(1.0, 0.0, (transition.time-half_max_time)/half_max_time);
-                                    ((255 as f32 * ease_amount) as u8, second)
+                                    let alpha = 255 as f32 * ease_amount;
+                                    (if alpha < 0.0 { 0.0 } else { alpha } as u8, second)
                                 }
                             };
-                            let color = Color{a: alpha, .. color};
+                            let color = Color{a: std::cmp::max(std::cmp::min(255, alpha), 0), .. color};
                             draw_slide_page(slideshow.get(page_to_draw as usize).unwrap(), graphics_context, default_font);
                             graphics_context.render_filled_rectangle(0.0, 0.0,
                                                                      graphics_context.logical_width() as f32,

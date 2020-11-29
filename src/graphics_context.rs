@@ -437,6 +437,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 let mut texture = texture_creator.create_texture_from_surface(
                     &font_surface
                 ).expect("how did this go wrong?");
+                std::mem::drop(font_surface);
 
                 texture.set_blend_mode(sdl2::render::BlendMode::Blend);
                 texture.set_color_mod(color.r, color.g, color.b);
@@ -447,7 +448,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                         Some(sdl2::rect::Rect::new(x as i32,
                                                                    y as i32,
                                                                    width,
-                                                                   height))).unwrap();
+                                                                   height)));
                 {
                     // wtf??????
                     // I doubt this has anything to do with unsafe textures...
