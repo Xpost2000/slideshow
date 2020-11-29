@@ -541,7 +541,9 @@ const DEFAULT_LAST_WRITE_TIMER_INTERVAL : f32 = 0.20;
 struct ApplicationState {
     state: ApplicationScreen,
 
-    current_working_directory: String,
+    // TODO: Handle external drives?
+    // That's a pretty big deal actually.
+    current_working_directory: std::path::PathBuf,
     // options state,
     currently_selected_resolution: usize,
     currently_selected_directory: usize,
@@ -554,7 +556,7 @@ impl ApplicationState {
     fn new(command_line_arguments: &Vec<String>) -> ApplicationState {
         ApplicationState {
             state: ApplicationScreen::ShowingSlide,
-            current_working_directory: String::from("./"),
+            current_working_directory: std::path::PathBuf::from("./").canonicalize().unwrap(),
             currently_selected_resolution: 0,
             currently_selected_directory: 0,
             last_write_timer: 0.0,
@@ -705,6 +707,18 @@ impl ApplicationState {
                                              sdl2::ttf::FontStyle::NORMAL);
 
                 let directory_listing = std::fs::read_dir(&self.current_working_directory).expect("Failed to get directory listing?");
+
+                graphics_context.render_text(default_font,
+                                             ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
+                                             heading_height as f32,
+                                             #[cfg(target_os = "windows")]
+                                             &format!("{}", &self.current_working_directory.to_str().unwrap())[4..],
+                                             #[cfg(target_os = "unix")]
+                                             &format!("{}", &self.current_working_directory.to_str().unwrap()),
+                                             heading_font_size,
+                                             Color::new(128, 128, 128, 255),
+                                             sdl2::ttf::FontStyle::NORMAL);
+
                 let mut draw_cursor_y : f32 = (heading_height*2) as f32;
                 let listings_to_show = 10;
                 graphics_context.render_filled_rectangle((((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
@@ -720,9 +734,23 @@ impl ApplicationState {
                         let is_selected = (index == 0);
                         let directory_string =
                             if is_selected {
-                                format!("* {}", path.expect("bad permission?").path().display())
+                                format!("* {}",
+                                        path
+                                        .expect("bad permission?")
+                                        .path()
+                                        .file_name()
+                                        .unwrap()
+                                        .to_str()
+                                        .unwrap())
                             } else {
-                                format!("{}", path.expect("bad permission?").path().display())
+                                format!("{}",
+                                        path
+                                        .expect("bad permission?")
+                                        .path()
+                                        .file_name()
+                                        .unwrap()
+                                        .to_str()
+                                        .unwrap())
                             };
                         let font_size = graphics_context.font_size_percent(
                             if is_selected {
@@ -923,7 +951,7 @@ impl ApplicationState {
                                 let path = path.expect("bad permission?");
                                 let file_type = path.file_type().unwrap();
                                 if file_type.is_dir() {
-                                    self.current_working_directory = path.path().to_str().expect("bad unicode").to_owned();
+                                    self.current_working_directory = path.path();
                                     self.currently_selected_directory = 0;
                                 } else {
                                     let new_slide = Slide::new_from_file(path.path().to_str().expect("bad unicode"));
@@ -935,7 +963,7 @@ impl ApplicationState {
                         },
 
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
-                            self.current_working_directory.push_str("../");
+                            self.current_working_directory.pop();
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
                             if self.currently_selected_directory > 0 {
