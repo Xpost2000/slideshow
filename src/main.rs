@@ -433,6 +433,7 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
                 }
             }
         } else {
+            const REPLACE_TABS_WITH_N_SPACES : &'static str = "    ";
             if line.len() >= 1 {
                 new_page.text_elements.push(TextElement{
                     x: 0.0,
@@ -443,7 +444,7 @@ fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page
                         } else {
                             &line
                         }
-                    ),
+                    ).replace('\t', REPLACE_TABS_WITH_N_SPACES),
                     font_size: context.current_font_size,
                     font_name: context.current_font_path.clone(),
                     color: context.current_element_color
@@ -745,6 +746,7 @@ impl ApplicationState {
                 if let Some(transition) = &slideshow.transition {
                     let easing_amount = transition.easing_amount();
                     match transition.transition_type {
+                        // These two transitions are almost identical... maybe I should refactor this later.
                         SlideTransitionType::HorizontalSlide => {
                             let forward_direction = second > first;
                             graphics_context.camera.y = 0.0;
@@ -785,6 +787,7 @@ impl ApplicationState {
                         },
                         SlideTransitionType::FadeTo(Color) => {
                             // split time into two halves.
+                            // let half_max_time = (transition.finish_time / 2);
                         },
                     }
                 }
