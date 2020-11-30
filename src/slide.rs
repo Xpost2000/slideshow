@@ -40,12 +40,78 @@ pub struct Page {
     pub text_elements: Vec<TextElement>,
 }
 
+use crate::graphics_context::*;
+
 impl Page {
     fn calculate_hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         let mut hasher_state = DefaultHasher::new();
         self.hash(&mut hasher_state);
         hasher_state.finish()
+    }
+
+    pub fn render(&self,
+                  graphics_context: &mut SDL2GraphicsContext,
+                  default_font: &str) {
+        use crate::markup::*;
+        graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
+        graphics_context.render_filled_rectangle(0.0, 0.0,
+                                                 graphics_context.logical_width() as f32,
+                                                 graphics_context.logical_height() as f32,
+                                                 self.background_color);
+
+        let mut last_font_size : u16 = 0;
+        let mut cursor_y : f32 = 0.0;
+
+        for text in &self.text_elements {
+            let font_size = text.font_size;
+            let mut cursor_x : f32 = 0.0;
+
+            let markup_lexer = MarkupLexer::new(&text.text);
+            let drawn_font =
+                if let Some(font) = &text.font_name {
+                    graphics_context.add_font(font)
+                } else {
+                    default_font 
+                };
+
+            let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
+            if last_font_size == 0 { last_font_size = height as u16; }
+            cursor_y += last_font_size as f32 * text.y;
+
+            for markup in markup_lexer {
+                let text_content = markup.get_text_content();
+                let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
+                graphics_context.render_text(drawn_font,
+                                             cursor_x, cursor_y,
+                                             text_content,
+                                             font_size,
+                                             text.color,
+                                             markup.get_text_drawing_style());
+                // render decoration
+                match markup {
+                    Markup::Strikethrough(_) => {
+                        graphics_context.render_filled_rectangle(cursor_x,
+                                                                 cursor_y + (font_size as f32 / 1.8),
+                                                                 width as f32,
+                                                                 font_size as f32 / 10.0,
+                                                                 text.color);
+                    }
+                    Markup::Underlined(_) => {
+                        graphics_context.render_filled_rectangle(cursor_x,
+                                                                 cursor_y + (font_size as f32),
+                                                                 width as f32,
+                                                                 font_size as f32 / 13.0,
+                                                                 text.color);
+                    }
+                    _ => {},
+                }
+                cursor_x += (width) as f32;
+            }
+
+            cursor_y += (height as f32);
+            last_font_size = font_size;
+        }
     }
 }
 
@@ -71,6 +137,9 @@ pub struct SlideTransition {
     pub finish_time: f32,
 }
 impl SlideTransition {
+    pub fn finished_fraction(&self) -> f32 {
+        self.time / self.finish_time
+    }
     pub fn finished_transition(&self) -> bool {
         self.time >= self.finish_time
     }

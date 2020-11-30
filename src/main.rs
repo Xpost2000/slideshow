@@ -116,69 +116,6 @@ impl ApplicationState {
     fn draw(&self, graphics_context: &mut SDL2GraphicsContext) {
         let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
 
-        fn draw_slide_page(page: &Page,
-                           graphics_context: &mut SDL2GraphicsContext,
-                           default_font: &str) {
-            graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
-            graphics_context.render_filled_rectangle(0.0, 0.0,
-                                                     graphics_context.logical_width() as f32,
-                                                     graphics_context.logical_height() as f32,
-                                                     page.background_color);
-
-            let mut last_font_size : u16 = 0;
-            let mut cursor_y : f32 = 0.0;
-
-            for text in &page.text_elements {
-                let font_size = text.font_size;
-                let mut cursor_x : f32 = 0.0;
-
-                let markup_lexer = MarkupLexer::new(&text.text);
-                let drawn_font =
-                    if let Some(font) = &text.font_name {
-                        graphics_context.add_font(font)
-                    } else {
-                        default_font 
-                    };
-
-                let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
-                if last_font_size == 0 { last_font_size = height as u16; }
-                cursor_y += last_font_size as f32 * text.y;
-
-                for markup in markup_lexer {
-                    let text_content = markup.get_text_content();
-                    let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
-                    graphics_context.render_text(drawn_font,
-                                                 cursor_x, cursor_y,
-                                                 text_content,
-                                                 font_size,
-                                                 text.color,
-                                                 markup.get_text_drawing_style());
-                    // render decoration
-                    match markup {
-                        Markup::Strikethrough(_) => {
-                            graphics_context.render_filled_rectangle(cursor_x,
-                                                                     cursor_y + (font_size as f32 / 1.8),
-                                                                     width as f32,
-                                                                     font_size as f32 / 10.0,
-                                                                     text.color);
-                        }
-                        Markup::Underlined(_) => {
-                            graphics_context.render_filled_rectangle(cursor_x,
-                                                                     cursor_y + (font_size as f32),
-                                                                     width as f32,
-                                                                     font_size as f32 / 13.0,
-                                                                     text.color);
-                        }
-                        _ => {},
-                    }
-                    cursor_x += (width) as f32;
-                }
-
-                cursor_y += (height as f32);
-                last_font_size = font_size;
-            }
-        }
-
         match self.state {
             ApplicationScreen::Quit => {},
             /*
@@ -229,26 +166,17 @@ impl ApplicationState {
                     .take(listings_to_show)
                     .enumerate() {
                         let is_selected = (index == 0);
-                        let directory_string =
+                        let directory_string = {
+                            let path_name = path.as_ref()
+                                .expect("bad permission?")
+                                .path().file_name().unwrap()
+                                .to_str().unwrap();
                             if is_selected {
-                                format!("* {}",
-                                        path
-                                        .expect("bad permission?")
-                                        .path()
-                                        .file_name()
-                                        .unwrap()
-                                        .to_str()
-                                        .unwrap())
+                                format!("* {}", path_name)
                             } else {
-                                format!("{}",
-                                        path
-                                        .expect("bad permission?")
-                                        .path()
-                                        .file_name()
-                                        .unwrap()
-                                        .to_str()
-                                        .unwrap())
-                            };
+                                format!("{}", path_name)
+                            }
+                        };
                         let font_size = graphics_context.font_size_percent(
                             if is_selected {
                                 0.053
@@ -332,10 +260,10 @@ impl ApplicationState {
                 let slideshow = &self.slideshow.as_ref().unwrap();
                 if let Some(transition) = &slideshow.transition {
                     let easing_amount = transition.easing_amount();
+                    let forward_direction = second > first;
                     match transition.transition_type {
                         // These two transitions are almost identical... maybe I should refactor this later.
                         SlideTransitionType::HorizontalSlide => {
-                            let forward_direction = second > first;
                             graphics_context.camera.y = 0.0;
 
                             graphics_context.camera.x =
@@ -344,17 +272,20 @@ impl ApplicationState {
                                 } else {
                                     0.0 + graphics_context.logical_width() as f32 * easing_amount
                                 };
-                            draw_slide_page(slideshow.get(first as usize).unwrap(), graphics_context, default_font);
+                            slideshow.get(first as usize)
+                                .unwrap()
+                                .render(graphics_context, default_font);
                             graphics_context.camera.x =
                                 if forward_direction {
                                     graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * easing_amount)
                                 } else {
                                     -(graphics_context.logical_width() as f32) + (graphics_context.logical_width() as f32 * easing_amount)
                                 };
-                            draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
+                            slideshow.get(second as usize)
+                                .unwrap()
+                                .render(graphics_context, default_font);
                         },
                         SlideTransitionType::VerticalSlide => {
-                            let forward_direction = second > first;
                             graphics_context.camera.x = 0.0;
 
                             graphics_context.camera.y =
@@ -363,20 +294,24 @@ impl ApplicationState {
                                 } else {
                                     0.0 + graphics_context.logical_height() as f32 * easing_amount
                                 };
-                            draw_slide_page(slideshow.get(first as usize).unwrap(), graphics_context, default_font);
+                            slideshow.get(first as usize)
+                                .unwrap()
+                                .render(graphics_context, default_font);
                             graphics_context.camera.y =
                                 if forward_direction {
                                     graphics_context.logical_height() as f32 - (graphics_context.logical_height() as f32 * easing_amount)
                                 } else {
                                     -(graphics_context.logical_height() as f32) + (graphics_context.logical_height() as f32 * easing_amount)
                                 };
-                            draw_slide_page(slideshow.get(second as usize).unwrap(), graphics_context, default_font);
+                            slideshow.get(second as usize)
+                                .unwrap()
+                                .render(graphics_context, default_font);
                         },
                         SlideTransitionType::FadeTo(color) => {
                             // split time into two halves.
                             let half_max_time = (transition.finish_time / 2.0);
                             let ease_function = transition.easing_function;
-                            let fraction_of_completion = transition.time/transition.finish_time;
+                            let fraction_of_completion = transition.finished_fraction();
                             let (alpha, page_to_draw) = {
                                 let ease_amount =
                                     if fraction_of_completion < 0.5 {
@@ -393,7 +328,9 @@ impl ApplicationState {
                                  })
                             };
                             let color = Color{a: alpha, .. color};
-                            draw_slide_page(slideshow.get(page_to_draw as usize).unwrap(), graphics_context, default_font);
+                            slideshow.get(page_to_draw as usize)
+                                .unwrap()
+                                .render(graphics_context, default_font);
                             graphics_context.render_filled_rectangle(0.0, 0.0,
                                                                      graphics_context.logical_width() as f32,
                                                                      graphics_context.logical_height() as f32,
@@ -408,7 +345,7 @@ impl ApplicationState {
                     graphics_context.camera.y = 0.0;
                     // graphics_context.clear_color(Color::new(0, 0, 0, 255));
                     if let Some(current_slide) = slideshow.get_current_page() {
-                        draw_slide_page(current_slide, graphics_context, default_font);
+                        current_slide.render(graphics_context, default_font);
                     } else {
                         graphics_context.clear_color(Color::new(10, 10, 16, 255));
                         graphics_context.logical_resolution = VirtualResolution::Display;
