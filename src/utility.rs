@@ -36,13 +36,13 @@ impl EasingFunction {
     }
 }
 
-pub fn clamp_i32(x: i32, min: i32, max: i32) -> i32 {
-    if x < min {
+pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
+    if input < min {
         min
-    } else if x > max {
+    } else if input > max {
         max
     } else {
-        x
+        input
     }
 }
 

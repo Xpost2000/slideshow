@@ -117,6 +117,24 @@ pub enum VirtualResolution {
     Virtual(u32, u32),
     Display,
 }
+pub enum TextJustificationHorizontal {
+    Left, Right, Center,
+}
+pub enum TextJustificationVertical {
+    Up, Down, Center,
+}
+pub struct TextJustification(TextJustificationHorizontal, TextJustificationVertical);
+impl TextJustification {
+    pub fn center() -> TextJustification {
+        TextJustification(TextJustificationHorizontal::Center, TextJustificationVertical::Center)
+    }
+}
+// for text justification
+pub enum TextBounds {
+    EntireScreen,
+    Rectangle(f32, f32, f32, f32),
+    ScreenLine(f32, f32),
+}
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -433,7 +451,14 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         (w as u32, h as u32)
     }
 
-    pub fn render_text(&mut self, font_id: &str, x: f32, y: f32, text: &str, font_size: u16, color: Color, style: sdl2::ttf::FontStyle) {
+    pub fn render_text(&mut self,
+                       font_id: &str,
+                       x: f32,
+                       y: f32,
+                       text: &str,
+                       font_size: u16,
+                       color: Color,
+                       style: sdl2::ttf::FontStyle) {
         let ttf_context = self.ttf_context;
         let texture_creator = self.window_canvas.texture_creator();
 
@@ -470,6 +495,39 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             },
             None => {}
         }
+    }
+
+    pub fn render_text_justified(&mut self,
+                                 font_id: &str,
+                                 bounds: TextBounds,
+                                 justification: TextJustification,
+                                 text: &str,
+                                 font_size: u16,
+                                 color: Color,
+                                 style: sdl2::ttf::FontStyle) {
+        let (width, height) = self.text_dimensions(font_id, text, font_size);
+        let (x, y, w, h) = {
+            match bounds {
+                TextBounds::EntireScreen => (0.0, 0.0, self.logical_width() as f32, self.logical_height() as f32),
+                TextBounds::Rectangle(x,y,w,h) => (x, y, w, h),
+                TextBounds::ScreenLine(x, y) => (x, y, self.logical_width() as f32, font_size as f32),
+            }
+        };
+        let x = {
+            match justification.0 {
+                TextJustificationHorizontal::Left => x,
+                TextJustificationHorizontal::Right => ((w - width as f32) + x),
+                TextJustificationHorizontal::Center => (w / 2.0) - (width as f32 / 2.0) + x,
+            }
+        };
+        let y = {
+            match justification.1 {
+                TextJustificationVertical::Up => x,
+                TextJustificationVertical::Down => ((h - height as f32) + y),
+                TextJustificationVertical::Center => (h / 2.0) - (height as f32 / 2.0) + y,
+            }
+        };
+        self.render_text(font_id, x, y, text, font_size, color, style);
     }
 
     pub fn render_filled_rectangle(&mut self, x: f32, y: f32, w: f32, h: f32, color: Color) {
