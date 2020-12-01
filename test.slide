@@ -1,7 +1,7 @@
 # Slide Format
 $background_color:#FFFFFF
 $resolution:1280:720
-$transition:horizontal_slide:cubic_ease_out:3.25
+$transition:vertical_slide:cubic_ease_out:3.25
 $page
 $color:#444444
 $font-size: 32
@@ -22,11 +22,6 @@ $color:#444444
 $font-size: 80
         _Why did I make this_?
 $color:#666666
-$font:"data/fonts/noto-serif-jp/NotoSerifJP-Regular.otf" 
-死漢字
-たつ、立つ – to stand (tatsu)
-はしる、走る – to run (hashiru)
-$reset-font
 $font-size: 36
 
       When I could have used:

@@ -144,7 +144,7 @@ impl ApplicationState {
                 graphics_context.render_text(default_font,
                                              ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
                                              heading_height as f32,
-                                             #[cfg(target_os = "windows")]
+                                             #[cfg(target_os = "windows")] // Weird thing that looks like a drive root? ?//?DRIVE_LETTER:/
                                              &format!("{}", &self.current_working_directory.to_str().unwrap())[4..],
                                              #[cfg(target_os = "unix")]
                                              &format!("{}", &self.current_working_directory.to_str().unwrap()),
@@ -260,46 +260,30 @@ impl ApplicationState {
                 #[cfg(debug_assertions)]
                 graphics_context.clear_color(Color::new(255, 0, 0, 255));
                 let slideshow = &self.slideshow.as_ref().unwrap();
+
                 if let Some(transition) = &slideshow.transition {
                     let easing_amount = transition.easing_amount();
                     let forward_direction = second > first;
+                    let sign = if forward_direction { 1.0 } else { -1.0 };
 
                     match transition.transition_type {
                         // These two transitions are almost identical... maybe I should refactor this later.
                         SlideTransitionType::HorizontalSlide => {
                             graphics_context.camera.y = 0.0;
 
-                            graphics_context.camera.x =
-                                if forward_direction {
-                                    0.0 - graphics_context.logical_width() as f32 * easing_amount
-                                } else {
-                                    0.0 + graphics_context.logical_width() as f32 * easing_amount
-                                };
+                            graphics_context.camera.x = 0.0 - graphics_context.logical_width() as f32 * easing_amount * sign;
                             slideshow.try_to_draw_page(graphics_context, default_font, first as usize);
-                            graphics_context.camera.x =
-                                if forward_direction {
-                                    graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * easing_amount)
-                                } else {
-                                    -(graphics_context.logical_width() as f32) + (graphics_context.logical_width() as f32 * easing_amount)
-                                };
+
+                            graphics_context.camera.x = (sign * graphics_context.logical_width() as f32) - (graphics_context.logical_width() as f32 * easing_amount) * sign;
                             slideshow.try_to_draw_page(graphics_context, default_font, second as usize);
                         },
                         SlideTransitionType::VerticalSlide => {
                             graphics_context.camera.x = 0.0;
 
-                            graphics_context.camera.y =
-                                if forward_direction {
-                                    0.0 - graphics_context.logical_height() as f32 * easing_amount
-                                } else {
-                                    0.0 + graphics_context.logical_height() as f32 * easing_amount
-                                };
+                            graphics_context.camera.y = 0.0 - graphics_context.logical_height() as f32 * easing_amount * sign;
                             slideshow.try_to_draw_page(graphics_context, default_font, first as usize);
-                            graphics_context.camera.y =
-                                if forward_direction {
-                                    graphics_context.logical_height() as f32 - (graphics_context.logical_height() as f32 * easing_amount)
-                                } else {
-                                    -(graphics_context.logical_height() as f32) + (graphics_context.logical_height() as f32 * easing_amount)
-                                };
+
+                            graphics_context.camera.y = (sign * graphics_context.logical_height() as f32) - (graphics_context.logical_height() as f32 * easing_amount) * sign;
                             slideshow.try_to_draw_page(graphics_context, default_font, second as usize);
                         },
                         SlideTransitionType::FadeTo(color) => {
@@ -308,6 +292,7 @@ impl ApplicationState {
                             let ease_function = transition.easing_function;
                             let fraction_of_completion = transition.finished_fraction();
                             let (alpha, page_to_draw) = {
+                                // non-linear easing looks weird for this. For presumably an obvious reason.
                                 let ease_amount =
                                     if fraction_of_completion < 0.5 {
                                         ease_function.evaluate(0.0, 1.0, transition.time/half_max_time)
@@ -336,6 +321,7 @@ impl ApplicationState {
             },
             ApplicationScreen::ShowingSlide => {
                 if let Some(slideshow) = &self.slideshow {
+                    graphics_context.camera.set_position(0.0, 0.0);
                     graphics_context.camera.x = 0.0;
                     graphics_context.camera.y = 0.0;
                     graphics_context.clear_color(Color::new(0, 0, 0, 255));

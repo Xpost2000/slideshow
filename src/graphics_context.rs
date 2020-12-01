@@ -142,6 +142,10 @@ pub struct Camera {
     pub y: f32,
     pub scale: f32,
 }
+
+impl Camera {
+}
+
 impl Default for Camera {
     fn default() -> Self {
         Self {
