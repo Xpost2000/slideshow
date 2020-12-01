@@ -109,28 +109,24 @@ FIXME
 // Tokenizes a command into a real command.
 // TODO!
 pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>> {
+    use std::convert::TryFrom;
     let mut args = command.args.iter();
 
     match command.name {
         "color" | "background_color" => {
             if let Some(next) = &args.next() {
-                let color = Color::parse_hexadecimal_literal(next);
-                if let Some(color) = color {
-                    Some(if command.name == "color" { Command::SetColor(color) }
-                         else { Command::SetBackgroundColor(color) })
-                } else {
-                    None
-                }
+                let color = Color::try_from(**next).unwrap_or(COLOR_BLACK);
+                Some(if command.name == "color" { Command::SetColor(color) }
+                     else { Command::SetBackgroundColor(color) })
             } else {
                 None
             }
         },
         "font" => {
             if let Some(next) = &args.next() {
-                // println!("next: {}", next);
                 Some(Command::SetFont(next))
             } else {
-                None
+                Some(Command::ResetFont)
             }
         },
         "font-size" => {
@@ -147,16 +143,17 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
             Some(Command::ResetFont)
         },
         "resolution" => {
-            let width = if let Some(next) = &args.next() {
-                match next.parse::<u32>() {Ok(value) => value, Err(_) => 1280,}
-            } else { 1280 };
-            let height = if let Some(next) = &args.next() {
-                match next.parse::<u32>() {Ok(value) => value, Err(_) => 720,}
-            } else { 720 };
+            let width =
+                args.next()
+                .unwrap_or(&"1280")
+                .parse::<u32>().unwrap_or(1280);
+            let height =
+                args.next()
+                .unwrap_or(&"720")
+                .parse::<u32>().unwrap_or(720);
             Some(Command::SetVirtualResolution(width, height))
         },
         "transition" => {
-            // $transition:fade_to:#000000:cubic_ease_in:1.25
             // I don't actually do any detailed checking...
             // that's a TODO, but that means a lot of this will be rewritten, probably.
             let type_string_of_transition = args
@@ -168,7 +165,7 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
                     "vertical" | "vertical_slide" => SlideTransitionType::VerticalSlide,
                     "fade" | "color_fade" | "fade_to" => {
                         let color = args.next().unwrap_or(&"#000000FF");
-                        SlideTransitionType::FadeTo(Color::parse_hexadecimal_literal(*color)
+                        SlideTransitionType::FadeTo(Color::try_from(*color)
                                                     .unwrap_or(COLOR_BLACK))
                     },
                     _ => { SlideTransitionType::HorizontalSlide },

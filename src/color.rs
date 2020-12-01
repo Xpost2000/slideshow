@@ -23,6 +23,7 @@ pub fn hexadecimal_to_decimal(literal: &str) -> u8 {
     result
 }
 
+use std::convert::TryFrom;
 impl Color {
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
         Color {r, g, b, a}
@@ -31,7 +32,6 @@ impl Color {
     pub fn parse_hexadecimal_literal(hex: &str) -> Option<Color> {
         // TODO : This is not perfectly safe since it'll be fine up to
         // 255... This needs to be templated.
-
         if let Some('#') = hex.chars().nth(0) {
             let hex = &hex[1..];
             match hex.len() {
@@ -59,6 +59,19 @@ impl Color {
         }
     }
 }
+
+impl std::convert::TryFrom<&str> for Color {
+    type Error = ();
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let result = Color::parse_hexadecimal_literal(value);
+        if result.is_some() {
+            Ok(result.unwrap())
+        } else {
+            Err(())
+        }
+    }
+}
+
 pub const COLOR_WHITE : Color = Color {r: 255, g: 255, b: 255, a: 255};
 pub const COLOR_BLACK : Color = Color {r: 0, g: 0, b: 0, a: 255};
 pub const COLOR_RIPE_LEMON : Color = Color {r: 247, g: 202, b: 24, a: 255};
