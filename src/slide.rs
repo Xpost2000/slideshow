@@ -54,8 +54,6 @@ impl Page {
                   graphics_context: &mut SDL2GraphicsContext,
                   default_font: &str) {
         use crate::markup::*;
-        graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
-        graphics_context.use_viewport_letterbox();
         graphics_context.render_filled_rectangle(0.0, 0.0,
                                                  graphics_context.logical_width() as f32,
                                                  graphics_context.logical_height() as f32,
@@ -125,12 +123,14 @@ impl Default for Page {
     }
 }
 
+#[derive(Debug,Copy,Clone)]
 pub enum SlideTransitionType {
     HorizontalSlide,
     VerticalSlide,
     FadeTo(Color),
 }
 
+#[derive(Debug)]
 pub struct SlideTransition {
     pub transition_type: SlideTransitionType, // type is keyword :(
     pub easing_function: EasingFunction,
@@ -156,6 +156,7 @@ pub struct Slide {
     pub current_page : isize,
 
     pub transition : Option<SlideTransition>,
+    pub resolution : (u32, u32),
 }
 impl Default for Slide {
     fn default() -> Slide {
@@ -173,16 +174,58 @@ impl Default for Slide {
                 }),
             current_page: isize::default(),
             last_modified_time: std::time::SystemTime::now(),// eh...
+            resolution: (1280, 720),
         }
     }
 }
 
 impl Slide {
+    pub fn new_from_file(file_name: &str) -> Option<Slide> {
+        match load_file(file_name) {
+            Ok(file_source) => {
+                use crate::slide_parser::compile_slide;
+                let slideshow_source = remove_comments_from_source(&file_source);
+                let mut new_slide = Slide {
+                    file_name: file_name.to_owned(),
+                    current_page: 0,
+                    last_modified_time: file_last_modified_time(file_name),
+                    .. compile_slide(&slideshow_source)
+                };
+
+                Some(new_slide)
+            },
+            Err(_) => {
+                None
+            }
+        }
+    }
+
+    pub fn try_to_draw_page(&self,
+                            graphics_context: &mut SDL2GraphicsContext,
+                            default_font: &str,
+                            page: usize) {
+        graphics_context.logical_resolution = VirtualResolution::Virtual(self.resolution().0,
+                                                                         self.resolution().1);
+        graphics_context.use_viewport_letterbox();
+
+        if let Some(selected_page) = self.get(page) {
+            selected_page.render(graphics_context, default_font);
+        } else {
+            graphics_context.clear_color(Color::new(10, 10, 16, 255));
+            graphics_context.logical_resolution = VirtualResolution::Display;
+            graphics_context.render_text_justified(default_font,
+                                                   TextBounds::EntireScreen,
+                                                   TextJustification::center(),
+                                                   "stupid slide needs pages... feed me!",
+                                                   graphics_context.font_size_percent(0.073),
+                                                   COLOR_WHITE,
+                                                   sdl2::ttf::FontStyle::NORMAL);
+        }
+    }
+
     // handle errors more explictly...
     pub fn file_last_modified_time(&self) -> std::time::SystemTime {
-        let metadata = std::fs::metadata(&self.file_name)
-            .expect("metadata retrieval failed... Deleted file?");
-        metadata.modified().expect("metadata modified time failed? No time?")
+        file_last_modified_time(&self.file_name)
     }
     /*
     This will load and keep the current page around something with a similar hash.
@@ -236,6 +279,10 @@ impl Slide {
         }
     }
 
+    pub fn resolution(&self) -> (u32, u32) {
+        self.resolution
+    }
+
     pub fn len(&self) -> usize {
         self.pages.len()
     }
@@ -262,27 +309,6 @@ impl Slide {
         self.current_page -= 1;
         self.current_page = clamp(self.current_page as i32, 0, self.len() as i32 - 1) as isize;
         desired_next_page
-    }
-
-    pub fn new_from_file(file_name: &str) -> Option<Slide> {
-        match load_file(file_name) {
-            Ok(file_source) => {
-                use crate::slide_parser::compile_slide_pages;
-                let slideshow_source = remove_comments_from_source(&file_source);
-
-                let mut new_slide = Slide {
-                    file_name: file_name.to_owned(),
-                    pages: compile_slide_pages(&slideshow_source),
-                    current_page: 0,
-                    .. Slide::default()
-                };
-                new_slide.last_modified_time = new_slide.file_last_modified_time();
-                Some(new_slide)
-            },
-            Err(_) => {
-                None
-            }
-        }
     }
 }
 

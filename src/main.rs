@@ -263,6 +263,7 @@ impl ApplicationState {
                 if let Some(transition) = &slideshow.transition {
                     let easing_amount = transition.easing_amount();
                     let forward_direction = second > first;
+
                     match transition.transition_type {
                         // These two transitions are almost identical... maybe I should refactor this later.
                         SlideTransitionType::HorizontalSlide => {
@@ -274,18 +275,14 @@ impl ApplicationState {
                                 } else {
                                     0.0 + graphics_context.logical_width() as f32 * easing_amount
                                 };
-                            slideshow.get(first as usize)
-                                .unwrap()
-                                .render(graphics_context, default_font);
+                            slideshow.try_to_draw_page(graphics_context, default_font, first as usize);
                             graphics_context.camera.x =
                                 if forward_direction {
                                     graphics_context.logical_width() as f32 - (graphics_context.logical_width() as f32 * easing_amount)
                                 } else {
                                     -(graphics_context.logical_width() as f32) + (graphics_context.logical_width() as f32 * easing_amount)
                                 };
-                            slideshow.get(second as usize)
-                                .unwrap()
-                                .render(graphics_context, default_font);
+                            slideshow.try_to_draw_page(graphics_context, default_font, second as usize);
                         },
                         SlideTransitionType::VerticalSlide => {
                             graphics_context.camera.x = 0.0;
@@ -296,18 +293,14 @@ impl ApplicationState {
                                 } else {
                                     0.0 + graphics_context.logical_height() as f32 * easing_amount
                                 };
-                            slideshow.get(first as usize)
-                                .unwrap()
-                                .render(graphics_context, default_font);
+                            slideshow.try_to_draw_page(graphics_context, default_font, first as usize);
                             graphics_context.camera.y =
                                 if forward_direction {
                                     graphics_context.logical_height() as f32 - (graphics_context.logical_height() as f32 * easing_amount)
                                 } else {
                                     -(graphics_context.logical_height() as f32) + (graphics_context.logical_height() as f32 * easing_amount)
                                 };
-                            slideshow.get(second as usize)
-                                .unwrap()
-                                .render(graphics_context, default_font);
+                            slideshow.try_to_draw_page(graphics_context, default_font, second as usize);
                         },
                         SlideTransitionType::FadeTo(color) => {
                             // split time into two halves.
@@ -332,9 +325,7 @@ impl ApplicationState {
                                 )
                             };
                             let color = Color{a: alpha, .. color};
-                            slideshow.get(page_to_draw as usize)
-                                .unwrap()
-                                .render(graphics_context, default_font);
+                            slideshow.try_to_draw_page(graphics_context, default_font, page_to_draw as usize);
                             graphics_context.render_filled_rectangle(0.0, 0.0,
                                                                      graphics_context.logical_width() as f32,
                                                                      graphics_context.logical_height() as f32,
@@ -348,19 +339,7 @@ impl ApplicationState {
                     graphics_context.camera.x = 0.0;
                     graphics_context.camera.y = 0.0;
                     graphics_context.clear_color(Color::new(0, 0, 0, 255));
-                    if let Some(current_slide) = slideshow.get_current_page() {
-                        current_slide.render(graphics_context, default_font);
-                    } else {
-                        graphics_context.clear_color(Color::new(10, 10, 16, 255));
-                        graphics_context.logical_resolution = VirtualResolution::Display;
-                        graphics_context.render_text_justified(default_font,
-                                                               TextBounds::EntireScreen,
-                                                               TextJustification::center(),
-                                                               "stupid slide needs pages... feed me!",
-                                                               graphics_context.font_size_percent(0.073),
-                                                               COLOR_WHITE,
-                                                               sdl2::ttf::FontStyle::NORMAL);
-                    }
+                    slideshow.try_to_draw_page(graphics_context, default_font, slideshow.current_page() as usize);
                 }
             },
         }
@@ -559,7 +538,7 @@ fn main() {
 
     let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         .position_centered()
-        // .resizable()
+        .resizable()
         .build()
         .expect("Window failed to open?");
 

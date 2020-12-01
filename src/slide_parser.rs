@@ -2,6 +2,7 @@ use crate::color::Color;
 use crate::color::COLOR_WHITE;
 use crate::color::COLOR_BLACK;
 use crate::slide::*;
+use crate::utility::*;
 
 pub struct SlideSettingsContext {
     pub current_background_color: Color,
@@ -21,7 +22,7 @@ impl Default for SlideSettingsContext {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 // tokenized commands.
 pub struct SlideLineCommand <'a> {
     pub name: &'a str,
@@ -36,6 +37,8 @@ pub enum Command <'a> {
     SetBackgroundColor(Color),
     SetColor(Color),
     SetFontSize(u16),
+    SetVirtualResolution(u32, u32),
+    SetTransition(SlideTransition),
 }
 
 // TODO!
@@ -47,7 +50,7 @@ pub fn execute_command(context: &mut SlideSettingsContext, command: Command) {
         // the compiled slide should not depend on the source...
         Command::SetFont(font_name) => {context.current_font_path = Some(font_name.to_owned());},
         Command::ResetFont => {context.current_font_path = None;},
-        _ => { println!("{:?} is an unknown command", command); }
+        _ => { println!("{:?} is an unknown command or not handled here", command); }
     }
 }
 
@@ -142,7 +145,57 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
         }
         "reset-font" => {
             Some(Command::ResetFont)
-        }
+        },
+        "resolution" => {
+            let width = if let Some(next) = &args.next() {
+                match next.parse::<u32>() {Ok(value) => value, Err(_) => 1280,}
+            } else { 1280 };
+            let height = if let Some(next) = &args.next() {
+                match next.parse::<u32>() {Ok(value) => value, Err(_) => 720,}
+            } else { 720 };
+            Some(Command::SetVirtualResolution(width, height))
+        },
+        "transition" => {
+            // $transition:fade_to:#000000:cubic_ease_in:1.25
+            // I don't actually do any detailed checking...
+            // that's a TODO, but that means a lot of this will be rewritten, probably.
+            let type_string_of_transition = args
+                .next()
+                .unwrap_or(&"horizontal_slide");
+            let type_of_transition =
+                match *type_string_of_transition {
+                    "horizontal" | "horizontal_slide" => SlideTransitionType::HorizontalSlide,
+                    "vertical" | "vertical_slide" => SlideTransitionType::VerticalSlide,
+                    "fade" | "color_fade" | "fade_to" => {
+                        let color = args.next().unwrap_or(&"#000000FF");
+                        SlideTransitionType::FadeTo(Color::parse_hexadecimal_literal(*color)
+                                                    .unwrap_or(COLOR_BLACK))
+                    },
+                    _ => { SlideTransitionType::HorizontalSlide },
+                };
+            let easing_function_name = args.next().unwrap_or(&"linear");
+            let easing_function_type =
+                match *easing_function_name {
+                    "linear" => EasingFunction::Linear,
+                    "quadratic_ease_in" => EasingFunction::QuadraticEaseIn,
+                    "quadratic_ease_out" => EasingFunction::QuadraticEaseOut,
+                    "cubic_ease_in" => EasingFunction::CubicEaseIn,
+                    "cubic_ease_out" => EasingFunction::CubicEaseOut,
+                    _ => { EasingFunction::Linear },
+                };
+            let time_duration = args.next()
+                .unwrap_or(&"1.0")
+                .parse::<f32>()
+                .unwrap_or(1.0);
+            Some(Command::SetTransition(
+                SlideTransition {
+                    transition_type: type_of_transition,
+                    easing_function: easing_function_type,
+                    time: 0.0,
+                    finish_time: time_duration,
+                }
+            ))
+        },
         _ => { None },
     }
 }
@@ -262,34 +315,46 @@ pub fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
     }
 }
 
-pub fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
-    let mut slide = Vec::new();
+pub fn compile_slide(slide_source : &String) -> Slide {
+    let mut slide = Slide::default();
+    let mut pages = Vec::new();
     let mut current_context = SlideSettingsContext::default();
-    // The compiler "state" is "global" but I should probably reject
-    // any text that isn't inside a currently compiled page...
-    // text outside of slides should be a warning though and should probably
-    // just be treated like a comment.
     let mut line_iterator = slide_source.lines().enumerate();
 
     while let Some((index, line)) = line_iterator.next() {
         match parse_slide_command(&line) {
             Some(commands) => {
-                if commands[0].name == "page" {
-                    let end_page_index = find_closing_command(&mut line_iterator, "end_page");
+                match commands[0].name {
+                    "page" => {
+                        let end_page_index = find_closing_command(&mut line_iterator, "end_page");
 
-                    if let Some(end_page_index) = end_page_index {
-                        let index = index+1;
-                        let end_page_index = end_page_index;
-                        let page_source_lines : Vec<&str> = slide_source.lines().collect();
-                        let new_page = parse_page(&mut current_context, page_source_lines[index..end_page_index].to_vec());
-                        slide.push(new_page);
-                    } else {
-                        println!("Error! EOF before an end page!");
-                    }
-                } else {
-                    for command in commands {
-                        handle_command(&mut current_context, command);
-                    }
+                        if let Some(end_page_index) = end_page_index {
+                            let index = index+1;
+                            let end_page_index = end_page_index;
+                            let page_source_lines : Vec<&str> = slide_source.lines().collect();
+                            let new_page = parse_page(&mut current_context, page_source_lines[index..end_page_index].to_vec());
+                            pages.push(new_page);
+                        } else {
+                            println!("Error! EOF before an end page!");
+                        }
+                    },
+                    "resolution" => {
+                        let cmd = parse_single_command(commands[0].clone());
+                        if let Command::SetVirtualResolution(w, h) = cmd.unwrap() {
+                            slide.resolution = (w, h);
+                        }
+                    },
+                    "transition" => {
+                        let cmd = parse_single_command(commands[0].clone());
+                        if let Command::SetTransition(transition) = cmd.unwrap() {
+                            slide.transition = Some(transition);
+                        }
+                    },
+                    _ => {
+                        for command in commands {
+                            handle_command(&mut current_context, command);
+                        }
+                    },
                 }
             },
             None => {
@@ -300,5 +365,6 @@ pub fn compile_slide_pages(slide_source : &String) -> Vec<Page> {
         }
     }
 
+    slide.pages = pages;
     slide
 }

@@ -76,3 +76,9 @@ pub fn load_file(file_name: &str) -> Result<String, &'static str> {
         }
     }
 }
+
+pub fn file_last_modified_time(file_name: &str) -> std::time::SystemTime {
+    let metadata = std::fs::metadata(file_name)
+        .expect("metadata retrieval failed... Deleted file?");
+    metadata.modified().expect("metadata modified time failed? No time?")
+}

@@ -1,6 +1,7 @@
 # Slide Format
 $background_color:#FFFFFF
-
+$resolution:1280:720
+$transition:horizontal_slide:cubic_ease_out:3.25
 $page
 $color:#444444
 $font-size: 32
