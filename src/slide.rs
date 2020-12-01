@@ -55,6 +55,7 @@ impl Page {
                   default_font: &str) {
         use crate::markup::*;
         graphics_context.logical_resolution = VirtualResolution::Virtual(1280, 720);
+        graphics_context.use_viewport_letterbox();
         graphics_context.render_filled_rectangle(0.0, 0.0,
                                                  graphics_context.logical_width() as f32,
                                                  graphics_context.logical_height() as f32,
@@ -252,14 +253,14 @@ impl Slide {
     pub fn next_page(&mut self) -> isize {
         let desired_next_page = self.current_page + 1;
         self.current_page += 1;
-        self.current_page = clamp(self.current_page as i32, 0, self.len() as i32) as isize;
+        self.current_page = clamp(self.current_page as i32, 0, self.len() as i32 - 1) as isize;
         desired_next_page
     }
 
     pub fn previous_page(&mut self) -> isize {
         let desired_next_page = self.current_page - 1;
         self.current_page -= 1;
-        self.current_page = clamp(self.current_page as i32, 0, self.len() as i32) as isize;
+        self.current_page = clamp(self.current_page as i32, 0, self.len() as i32 - 1) as isize;
         desired_next_page
     }
 

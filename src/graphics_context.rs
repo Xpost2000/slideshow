@@ -178,16 +178,16 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
         let mut white_texture = texture_creator.create_texture_streaming(sdl2::pixels::PixelFormatEnum::RGB24, 8, 8).unwrap();
         white_texture.with_lock(None,
-                                  |buffer: &mut [u8], pitch: usize| {
-                                      for y in 0..8 {
-                                          for x in 0..8 {
-                                              let pixel_start = y * pitch + x * 3;
-                                              buffer[pixel_start] = 255;
-                                              buffer[pixel_start+1] = 255;
-                                              buffer[pixel_start+2] = 255;
-                                          }
-                                      }
-                                  });
+                                |buffer: &mut [u8], pitch: usize| {
+                                    for y in 0..8 {
+                                        for x in 0..8 {
+                                            let pixel_start = y * pitch + x * 3;
+                                            buffer[pixel_start] = 255;
+                                            buffer[pixel_start+1] = 255;
+                                            buffer[pixel_start+2] = 255;
+                                        }
+                                    }
+                                });
 
         SDL2GraphicsContext {
             window_canvas,
@@ -200,6 +200,21 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             camera: Camera::default(),
             logical_resolution: VirtualResolution::Display,
         }
+    }
+
+    pub fn use_viewport_letterbox(&mut self) {
+        let (x,y,w,h) = self.get_letterbox_viewport_rectangle();
+        self.window_canvas.set_viewport(
+            Some(sdl2::rect::Rect::new(
+                x as i32,
+                y as i32,
+                w as u32,
+                h as u32
+            )));
+    }
+
+    pub fn use_viewport_default(&mut self) {
+        self.window_canvas.set_viewport(None);
     }
 
     pub fn enable_alpha_blending(&mut self) {
@@ -379,8 +394,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         }
 
         /*
-           I'm fairly certain I don't have to do something like this... Should probably
-           google this further.
+        I'm fairly certain I don't have to do something like this... Should probably
+        google this further.
          */
         let &mut SDL2GraphicsContext { ref mut window_canvas, ref image_assets, .. } = self;
         match image_assets.get(image_id) {
@@ -396,31 +411,63 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         }
     }
 
-    // test?
-    pub fn _sdl2_scaling(&mut self) {
-        self.window_canvas.set_logical_size(self.logical_width(), self.logical_height());
-    }
-
     fn scale_xy_pair_to_logical(&self, x: f32, y: f32) -> (f32, f32) {
         ({
             let percent = (x as f32) / (self.screen_width() as f32);
             (percent * self.logical_width() as f32)
-         },
+        },
          {
-            let percent = (y as f32) / (self.screen_height() as f32);
-            (percent * self.logical_height() as f32)
+             let percent = (y as f32) / (self.screen_height() as f32);
+             (percent * self.logical_height() as f32)
          })
     }
 
+    // also does aspect ratio scaling
+    pub fn aspect_ratio(&self) -> f32 {
+        self.screen_width() as f32 / self.screen_height() as f32
+    }
+    pub fn logical_aspect_ratio(&self) -> f32 {
+        self.logical_width() as f32 / self.logical_height() as f32
+    }
+    fn aspect_ratio_scale_factor(&self) -> f32 {
+        let scaling_factor = if self.aspect_ratio() > self.logical_aspect_ratio() {
+            // tall
+            self.screen_height() as f32 / self.logical_height() as f32
+        } else {
+            // widescreen
+            self.screen_width() as f32 / self.logical_width() as f32
+        };
+        scaling_factor
+    }
+
+    fn scale_and_transform_xy_pair_to_real(&self, x: f32, y: f32) -> (f32, f32) {
+        let scaling_factor = self.aspect_ratio_scale_factor();
+
+        let scaling_factor = self.aspect_ratio_scale_factor();
+        let tall_aspect_ratio = self.aspect_ratio() > self.logical_aspect_ratio();
+
+        let logical_width_scaled = self.logical_width() as f32 * scaling_factor;
+        let logical_height_scaled = self.logical_height() as f32 * scaling_factor;
+
+        if tall_aspect_ratio {
+            (x*scaling_factor + (self.screen_width() as f32 / 2.0) - (logical_width_scaled / 2.0),
+             y*scaling_factor)
+        } else {
+            (x*scaling_factor,
+             y*scaling_factor + (self.screen_height() as f32 / 2.0) - (logical_height_scaled / 2.0))
+        }
+    }
+
     fn scale_xy_pair_to_real(&self, x: f32, y: f32) -> (f32, f32) {
-        ({
-            let percent = (x as f32) / (self.logical_width() as f32);
-            (percent * self.screen_width() as f32)
-         },
-         {
-            let percent = (y as f32) / (self.logical_height() as f32);
-            (percent * self.screen_height() as f32)
-         })
+        let scaling_factor = self.aspect_ratio_scale_factor();
+        (x*scaling_factor, y*scaling_factor)
+    }
+
+    fn get_letterbox_viewport_rectangle(&self) -> (f32, f32, f32, f32) {
+        let (x,y) = self.scale_and_transform_xy_pair_to_real(0.0, 0.0);
+        let (w,h) = self.scale_xy_pair_to_real(self.logical_width() as f32, self.logical_height() as f32);
+        // let (w,h) = self.resolution();
+        (x,y,w,h)
     }
 
     pub fn font_size_percent(&self, percent: f32) -> u16 {
@@ -440,7 +487,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
     pub fn scale_font_size(&self, font_size: u16) -> u16 {
         let percent = (font_size as f32) / (self.logical_height() as f32);
-        (percent * self.screen_height() as f32) as u16
+        (font_size as f32 * self.aspect_ratio_scale_factor()) as u16
     }
 
     // This will get the virtual resolution

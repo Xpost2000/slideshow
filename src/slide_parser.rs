@@ -192,6 +192,7 @@ pub fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
                                 if let Some(end) = end {
                                     let string_literal = &line[start..(start+end)];
                                     tokenized_first_pass.push(string_literal);
+                                    // char_iterator.skip(end);
                                     for _ in 0..end { char_iterator.next(); }
                                 }
                             },

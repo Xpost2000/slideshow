@@ -19,8 +19,8 @@ use self::slide::*;
 use sdl2::event::Event as SDLEvent;
 use sdl2::keyboard::Keycode as SDLKeycode;
 
-const DEFAULT_WINDOW_WIDTH : u32 = 1280;
-const DEFAULT_WINDOW_HEIGHT : u32 = 720;
+const DEFAULT_WINDOW_WIDTH : u32 = 1024;
+const DEFAULT_WINDOW_HEIGHT : u32 = 768;
 const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
 
 #[derive(Clone, Copy)]
@@ -167,16 +167,16 @@ impl ApplicationState {
                     .enumerate() {
                         let is_selected = (index == 0);
                         let directory_string = {
-                            let path_name = path.as_ref()
-                                .expect("bad permission?")
-                                .path().file_name().unwrap()
-                                .to_str().unwrap();
+                            let path = path.as_ref().expect("bad permission?").path();
+                            let path_name = path.file_name().unwrap() .to_str().unwrap();
+
                             if is_selected {
                                 format!("* {}", path_name)
                             } else {
                                 format!("{}", path_name)
                             }
                         };
+
                         let font_size = graphics_context.font_size_percent(
                             if is_selected {
                                 0.053
@@ -184,6 +184,7 @@ impl ApplicationState {
                                 0.045
                             });
                         let (width, height) = graphics_context.text_dimensions(default_font, &directory_string, font_size);
+
                         graphics_context.render_text(default_font,
                                                      (((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
                                                      draw_cursor_y,
@@ -256,6 +257,7 @@ impl ApplicationState {
                 }
             },
             ApplicationScreen::ChangePage(first, second) => {
+                #[cfg(debug_assertions)]
                 graphics_context.clear_color(Color::new(255, 0, 0, 255));
                 let slideshow = &self.slideshow.as_ref().unwrap();
                 if let Some(transition) = &slideshow.transition {
@@ -320,12 +322,14 @@ impl ApplicationState {
                                         ease_function.evaluate(1.0, 0.0, (transition.time-half_max_time)/half_max_time)
                                     };
                                 let alpha = 255 as f32 * ease_amount;
-                                (clamp(alpha, 0.0, 255.0) as u8,
-                                 if fraction_of_completion < 0.5 {
-                                     first
-                                 } else {
-                                     second
-                                 })
+                                (
+                                    clamp(alpha, 0.0, 255.0) as u8,
+                                    if fraction_of_completion < 0.5 {
+                                        first
+                                    } else {
+                                        second
+                                    }
+                                )
                             };
                             let color = Color{a: alpha, .. color};
                             slideshow.get(page_to_draw as usize)
@@ -343,7 +347,7 @@ impl ApplicationState {
                 if let Some(slideshow) = &self.slideshow {
                     graphics_context.camera.x = 0.0;
                     graphics_context.camera.y = 0.0;
-                    // graphics_context.clear_color(Color::new(0, 0, 0, 255));
+                    graphics_context.clear_color(Color::new(0, 0, 0, 255));
                     if let Some(current_slide) = slideshow.get_current_page() {
                         current_slide.render(graphics_context, default_font);
                     } else {
@@ -555,6 +559,7 @@ fn main() {
 
     let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         .position_centered()
+        // .resizable()
         .build()
         .expect("Window failed to open?");
 
@@ -578,6 +583,7 @@ fn main() {
     'running: loop {
         let start_time = sdl2_timer.ticks();
         graphics_context.clear_color(Color::new(0, 0, 0, 255));
+        graphics_context.use_viewport_default();
         if let ApplicationScreen::Quit = application_state.state {
             break 'running;
         } else {
