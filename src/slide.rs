@@ -74,19 +74,19 @@ impl Page {
                     default_font 
                 };
 
-            let (_, height) = graphics_context.text_dimensions(drawn_font, &text.text, font_size);
+            let height = graphics_context.text_dimensions(drawn_font, &text.text, font_size).1;
             if last_font_size == 0 { last_font_size = height as u16; }
             cursor_y += last_font_size as f32 * text.y;
 
             for markup in markup_lexer {
                 let text_content = markup.get_text_content();
                 let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
-                graphics_context.render_text(drawn_font,
-                                             cursor_x, cursor_y,
-                                             text_content,
-                                             font_size,
-                                             text.color,
-                                             markup.get_text_drawing_style());
+                graphics_context.render_static_text(drawn_font,
+                                                    cursor_x, cursor_y,
+                                                    text_content,
+                                                    font_size,
+                                                    text.color,
+                                                    markup.get_text_drawing_style());
                 // render decoration
                 match markup {
                     Markup::Strikethrough(_) => {

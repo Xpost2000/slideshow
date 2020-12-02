@@ -1,4 +1,11 @@
-// TODO better interface for resolution independence?
+/*
+   For now since I don't want to use a texture atlas to avoid too much work,
+   draw_static_text will be a thing.
+
+   It will be the same thing as draw_text, but it will save it to a cache with a hashmap.
+
+TODO: Clear text cache.
+*/
 extern crate sdl2;
 
 use sdl2::pixels::Color as SDLColor;
@@ -154,6 +161,15 @@ impl Default for Camera {
         }
     }
 }
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+struct StaticTextCacheKey {
+    font_id: String,
+    text: String,
+    font_size: u16,
+    style: sdl2::ttf::FontStyle,
+}
+
 pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     pub window_canvas : SDL2WindowCanvas,
     ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
@@ -161,9 +177,10 @@ pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     video_subsystem: &'sdl2 sdl2::VideoSubsystem,
 
     white_rectangle_texture: SDL2ImageTextureAsset,
-
+    static_text_texture_cache: HashMap<StaticTextCacheKey, sdl2::render::Texture>,
     font_assets : HashMap<String, SDL2FontAsset<'ttf>>,
     image_assets : SDL2ImageTextureAssets,
+
     // camera should probably not be public?
     pub camera: Camera,
     pub logical_resolution : VirtualResolution,
@@ -200,6 +217,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             image_context,
             video_subsystem,
             font_assets: HashMap::new(),
+            static_text_texture_cache: HashMap::new(),
             image_assets: SDL2ImageTextureAssets::new(texture_creator),
             white_rectangle_texture: SDL2ImageTextureAsset{ texture: white_texture },
             camera: Camera::default(),
@@ -505,21 +523,12 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         (w as u32, h as u32)
     }
 
-    pub fn render_text(&mut self,
-                       font_id: &str,
-                       x: f32,
-                       y: f32,
-                       text: &str,
-                       font_size: u16,
-                       color: Color,
-                       style: sdl2::ttf::FontStyle) {
+    fn draw_string_texture(&mut self,
+                           font_id: &str,
+                           text: &str,
+                           font_size: u16,
+                           style: sdl2::ttf::FontStyle) -> Option<sdl2::render::Texture> {
         let texture_creator = self.window_canvas.texture_creator();
-
-        // scale coordinates and such.
-        let font_size = self.scale_font_size((font_size as f32 * self.camera.scale) as u16);
-        let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
-                                                (y * self.camera.scale) + self.camera.y);
-
         match self.find_text_asset_by_size_mut(font_id, font_size) {
             Some(font) => {
                 if font.get_style() != style {
@@ -529,23 +538,138 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                     .blended(SDLColor::RGBA(255, 255, 255, 255))
                     .expect("how did this go wrong?");
 
-                let mut texture = texture_creator.create_texture_from_surface(
+                let texture = texture_creator.create_texture_from_surface(
                     &font_surface
                 ).expect("how did this go wrong?");
                 std::mem::drop(font_surface);
+                Some(texture)
+            },
+            None => { None }
+        }
+    }
 
-                texture.set_blend_mode(sdl2::render::BlendMode::Blend);
-                texture.set_color_mod(color.r, color.g, color.b);
-                texture.set_alpha_mod(color.a);
+    fn load_cached_string_texture(&mut self,
+                                  font_id: &str,
+                                  text: &str,
+                                  font_size: u16,
+                                  style: sdl2::ttf::FontStyle) -> Option<&mut sdl2::render::Texture> {
+        // is &str hashable?
+        let key =
+            StaticTextCacheKey {
+                font_id: font_id.to_owned(),
+                text: text.to_owned(),
+                font_size,
+                style,
+            };
+        let is_already_in_cache = self.static_text_texture_cache.get(&key).is_some();
 
-                let sdl2::render::TextureQuery { width, height, .. } = texture.query();
-                self.window_canvas.copy(&texture, None,
+        if is_already_in_cache {
+            self.static_text_texture_cache.get_mut(&key)
+        } else {
+            let new_texture_to_cache = self.draw_string_texture(font_id, text, font_size, style);
+            match new_texture_to_cache {
+                Some(texture) => {
+                    println!("inserting");
+                    self.static_text_texture_cache.insert(key.clone(), texture);
+                    self.static_text_texture_cache.get_mut(&key)
+                },
+                None => None
+            }
+        }
+    }
+
+    fn get_cached_string_texture(&self,
+                                  font_id: &str,
+                                  text: &str,
+                                  font_size: u16,
+                                  style: sdl2::ttf::FontStyle) -> Option<&sdl2::render::Texture> {
+        // is &str hashable?
+        let key =
+            StaticTextCacheKey {
+                font_id: font_id.to_owned(),
+                text: text.to_owned(),
+                font_size,
+                style,
+            };
+        self.static_text_texture_cache.get(&key)
+    }
+
+    pub fn clear_font_cache(&mut self) {
+        unimplemented!("clear_font_cache");
+    }
+    pub fn clear_static_string_cache(&mut self) {
+        unimplemented!("clear_static_string_cache");
+    }
+
+    pub fn render_static_text(&mut self,
+                              font_id: &str,
+                              x: f32,
+                              y: f32,
+                              text: &str,
+                              font_size: u16,
+                              color: Color,
+                              style: sdl2::ttf::FontStyle) {
+        let font_size = self.scale_font_size((font_size as f32 * self.camera.scale) as u16);
+        let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
+                                                (y * self.camera.scale) + self.camera.y);
+
+        {
+            let mut text_texture = self.load_cached_string_texture(font_id, text, font_size, style);
+            match &mut text_texture {
+                Some(text_texture) => {
+                    text_texture.set_blend_mode(sdl2::render::BlendMode::Blend);
+                    text_texture.set_color_mod(color.r, color.g, color.b);
+                    text_texture.set_alpha_mod(color.a);
+                },
+                None => {},
+            }
+        }
+        let &mut SDL2GraphicsContext { ref mut window_canvas,
+                                       ref static_text_texture_cache, .. } = self;
+        {
+            let text_texture = static_text_texture_cache.get(
+                &StaticTextCacheKey {
+                    font_id: font_id.to_owned(),
+                    text: text.to_owned(),
+                    font_size,
+                    style,
+                }
+            ).unwrap();
+            let sdl2::render::TextureQuery { width, height, .. } = text_texture.query();
+            window_canvas.copy(&text_texture, None,
+                               Some(sdl2::rect::Rect::new(x as i32,
+                                                          y as i32,
+                                                          width,
+                                                          height))).unwrap();
+        }
+    }
+
+    pub fn render_text(&mut self,
+                       font_id: &str,
+                       x: f32,
+                       y: f32,
+                       text: &str,
+                       font_size: u16,
+                       color: Color,
+                       style: sdl2::ttf::FontStyle) {
+        let font_size = self.scale_font_size((font_size as f32 * self.camera.scale) as u16);
+        let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
+                                                (y * self.camera.scale) + self.camera.y);
+
+        match self.draw_string_texture(font_id, text, font_size, style) {
+            Some(mut text_texture) => {
+                text_texture.set_blend_mode(sdl2::render::BlendMode::Blend);
+                text_texture.set_color_mod(color.r, color.g, color.b);
+                text_texture.set_alpha_mod(color.a);
+
+                let sdl2::render::TextureQuery { width, height, .. } = text_texture.query();
+                self.window_canvas.copy(&text_texture, None,
                                         Some(sdl2::rect::Rect::new(x as i32,
                                                                    y as i32,
                                                                    width,
                                                                    height)))
                     .unwrap();
-                unsafe{texture.destroy();}
+                unsafe{text_texture.destroy();}
             },
             None => {}
         }

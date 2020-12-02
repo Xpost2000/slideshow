@@ -12,6 +12,12 @@ $font-size: 122
       SLIDESHOW
 $color:#777777
 $font-size: 48
+# $font:"data/fonts/mnijimimincho.otf"
+$font:"data/fonts/noto-serif-jp/NotoSerifJP-Regular.otf"
+               ランダム
+               ランダム
+               Test
+$reset-font
                A stupid slideshow program in Rust,
                Yeah as of this version there's no layout
                or alignment, so it's done by hand :(
