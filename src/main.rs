@@ -356,6 +356,8 @@ impl ApplicationState {
                                     self.current_working_directory = path.path();
                                     self.currently_selected_directory = 0;
                                 } else {
+                                    graphics_context.clear_resources();
+
                                     let new_slide = Slide::new_from_file(path.path().to_str().expect("bad unicode"));
                                     self.slideshow = new_slide;
 
@@ -464,6 +466,7 @@ impl ApplicationState {
                             self.state = ApplicationScreen::Quit;
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
+                            graphics_context.clear_resources();
                             self.slideshow = None;
                             self.state = ApplicationScreen::InvalidOrNoSlide;
                         },
@@ -484,6 +487,7 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::R), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
+                                graphics_context.clear_resources();
                                 slideshow.reload().expect("should be successful");
                             }
                         },

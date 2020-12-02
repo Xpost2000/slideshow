@@ -592,10 +592,21 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     }
 
     pub fn clear_font_cache(&mut self) {
-        unimplemented!("clear_font_cache");
+        self.font_assets.clear();
     }
+
     pub fn clear_static_string_cache(&mut self) {
-        unimplemented!("clear_static_string_cache");
+        {
+            let drained = self.static_text_texture_cache.drain();
+            for (_, texture) in drained {
+                unsafe{ texture.destroy(); }
+            }
+        }
+    }
+
+    pub fn clear_resources(&mut self) {
+        self.clear_font_cache();
+        self.clear_static_string_cache();
     }
 
     pub fn render_static_text(&mut self,
