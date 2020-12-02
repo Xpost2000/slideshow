@@ -139,21 +139,18 @@ impl<'a> MarkupLexer<'a> {
 
         while let Some(character) = self.next_character() {
             if character == to_match {
-                let good_match = 
-                    if let Some(previous_character) = previous_character {
-                        if !is_whitespace(previous_character) && character != previous_character {
-                            if let Some(&next_character) = self.peek_character() {
-                                // This will generally be correct?
-                                is_punctuation(next_character) || is_whitespace(next_character)
+                let good_match =
+                    previous_character.and_then(
+                        |previous_character| {
+                            if !is_whitespace(previous_character) && previous_character != character {
+                                let result = self.peek_character()
+                                    .and_then(|c| Some(is_punctuation(*c) ||
+                                                       is_whitespace(*c)));
+                                Some(result.unwrap_or(true))
                             } else {
-                                true
+                                None
                             }
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    };
+                        }).unwrap_or(false);
 
                 if good_match {
                     return (sentence, good_match);

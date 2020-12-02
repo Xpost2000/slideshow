@@ -321,7 +321,7 @@ impl ApplicationState {
             },
             ApplicationScreen::ShowingSlide => {
                 if let Some(slideshow) = &self.slideshow {
-                    graphics_context.camera.set_position(0.0, 0.0);
+                    // graphics_context.camera.set_position(0.0, 0.0);
                     graphics_context.camera.x = 0.0;
                     graphics_context.camera.y = 0.0;
                     graphics_context.clear_color(Color::new(0, 0, 0, 255));
@@ -561,7 +561,7 @@ fn main() {
         graphics_context.present();
         let end_time = sdl2_timer.ticks();
         delta_time = end_time - start_time;
-        #[cfg(debug_assertions)]
-        {println!("{}", 1.0/(delta_time as f32/1000.0));}
+        // #[cfg(debug_assertions)]
+        // {println!("{}", 1.0/(delta_time as f32/1000.0));}
     }
 }
