@@ -80,13 +80,12 @@ impl Page {
 
             for markup in markup_lexer {
                 let text_content = markup.get_text_content();
-                let width = graphics_context.logical_text_dimensions(drawn_font, text_content, font_size).0;
-                graphics_context.render_static_text(drawn_font,
-                                                    cursor_x, cursor_y,
-                                                    text_content,
-                                                    font_size,
-                                                    text.color,
-                                                    markup.get_text_drawing_style());
+                let width = graphics_context.render_static_text(drawn_font,
+                                                                cursor_x, cursor_y,
+                                                                text_content,
+                                                                font_size,
+                                                                text.color,
+                                                                markup.get_text_drawing_style());
                 // render decoration
                 match markup {
                     Markup::Strikethrough(_) => {

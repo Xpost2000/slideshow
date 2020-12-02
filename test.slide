@@ -12,12 +12,6 @@ $font-size: 122
       SLIDESHOW
 $color:#777777
 $font-size: 48
-# $font:"data/fonts/mnijimimincho.otf"
-$font:"data/fonts/noto-serif-jp/NotoSerifJP-Regular.otf"
-               ランダム
-               ランダム
-               Test
-$reset-font
                A stupid slideshow program in Rust,
                Yeah as of this version there's no layout
                or alignment, so it's done by hand :(
@@ -264,7 +258,20 @@ $font-size: 16
 $color:#888888
                                (Since this is a text document?)
 $end_page
+$page
+$color:#444444
+$font-size: 48
+$font:"data/fonts/noto-serif-jp/NotoSerifJP-Regular.otf"
+              *Oh yeah, Unicode.*
+               /₩100/ - Big yay
+               /€100/ - Biggest yay
+               /$100/ - Biggest bigger yay
 
+               ランダム -> Random? (according to google)
+               C = 2πR
+$reset-font
+$reset-font
+$end_page
 $page
 $font-size: 72
 $color:#555555
@@ -275,12 +282,12 @@ $color:#555555
               Any Questions?
 $end_page
 
-$page
-$font-size: 72
-$color:#555555
-$font:"data/fonts/inconsolata/Inconsolata-Regular.ttf" 
-Testing Inconsolata!
-$reset-font
-
-We should back at Baskerville!
-$end_page
+#$page
+#$font-size: 72
+#$color:#555555
+#$font:"data/fonts/inconsolata/Inconsolata-Regular.ttf" 
+#Testing Inconsolata!
+#$reset-font
+#
+#We should back at Baskerville!
+#$end_page

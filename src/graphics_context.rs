@@ -267,9 +267,11 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         image_file_name
     }
     pub fn add_font<'a>(&mut self, font_name: &'a str) -> &'a str {
-        self.font_assets.insert(font_name.to_owned(),
-                                SDL2FontAsset::new_with_common_sizes(font_name.to_owned(),
-                                                                     &self.ttf_context));
+        if !self.font_assets.contains_key(font_name) {
+            self.font_assets.insert(font_name.to_owned(),
+                                    SDL2FontAsset::new_with_common_sizes(font_name.to_owned(),
+                                                                         &self.ttf_context));
+        }
         font_name
     }
 
@@ -439,17 +441,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         }
     }
 
-    fn scale_xy_pair_to_logical(&self, x: f32, y: f32) -> (f32, f32) {
-        ({
-            let percent = (x as f32) / (self.screen_width() as f32);
-            (percent * self.logical_width() as f32)
-        },
-         {
-             let percent = (y as f32) / (self.screen_height() as f32);
-             (percent * self.logical_height() as f32)
-         })
-    }
-
     // also does aspect ratio scaling
     pub fn aspect_ratio(&self) -> f32 {
         self.screen_width() as f32 / self.screen_height() as f32
@@ -484,9 +475,14 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         }
     }
 
+    fn scale_xy_pair_to_logical(&self, x: f32, y: f32) -> (f32, f32) {
+        let scaling_factor = self.aspect_ratio_scale_factor();
+        (x / scaling_factor, y / scaling_factor)
+    }
+
     fn scale_xy_pair_to_real(&self, x: f32, y: f32) -> (f32, f32) {
         let scaling_factor = self.aspect_ratio_scale_factor();
-        (x*scaling_factor, y*scaling_factor)
+        (x * scaling_factor, y * scaling_factor)
     }
 
     fn get_letterbox_viewport_rectangle(&self) -> (f32, f32, f32, f32) {
@@ -569,6 +565,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
             let new_texture_to_cache = self.draw_string_texture(font_id, text, font_size, style);
             match new_texture_to_cache {
                 Some(texture) => {
+                    #[cfg(debug_assertions)]
                     println!("inserting");
                     self.static_text_texture_cache.insert(key.clone(), texture);
                     self.static_text_texture_cache.get_mut(&key)
@@ -608,7 +605,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                               text: &str,
                               font_size: u16,
                               color: Color,
-                              style: sdl2::ttf::FontStyle) {
+                              style: sdl2::ttf::FontStyle) -> f32 {
         let font_size = self.scale_font_size((font_size as f32 * self.camera.scale) as u16);
         let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
                                                 (y * self.camera.scale) + self.camera.y);
@@ -641,6 +638,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                                           y as i32,
                                                           width,
                                                           height))).unwrap();
+            return self.scale_xy_pair_to_logical(width as f32, 0.0).0;
         }
     }
 
@@ -651,7 +649,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                        text: &str,
                        font_size: u16,
                        color: Color,
-                       style: sdl2::ttf::FontStyle) {
+                       style: sdl2::ttf::FontStyle) -> f32 {
         let font_size = self.scale_font_size((font_size as f32 * self.camera.scale) as u16);
         let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
                                                 (y * self.camera.scale) + self.camera.y);
@@ -670,8 +668,9 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                                                    height)))
                     .unwrap();
                 unsafe{text_texture.destroy();}
+                return self.scale_xy_pair_to_logical(width as f32, 0.0).0;
             },
-            None => {}
+            None => { panic!("!"); }
         }
     }
 
@@ -682,7 +681,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                  text: &str,
                                  font_size: u16,
                                  color: Color,
-                                 style: sdl2::ttf::FontStyle) {
+                                 style: sdl2::ttf::FontStyle) -> f32 {
         let (width, height) = self.text_dimensions(font_id, text, font_size);
         let (x, y, w, h) = {
             match bounds {
@@ -705,7 +704,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                 TextJustificationVertical::Center => (h / 2.0) - (height as f32 / 2.0) + y,
             }
         };
-        self.render_text(font_id, x, y, text, font_size, color, style);
+        self.render_text(font_id, x, y, text, font_size, color, style)
     }
 
     pub fn render_filled_rectangle(&mut self, x: f32, y: f32, w: f32, h: f32, color: Color) {
