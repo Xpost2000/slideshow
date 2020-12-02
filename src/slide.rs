@@ -108,7 +108,7 @@ impl Page {
                 cursor_x += (width) as f32;
             }
 
-            cursor_y += (height as f32);
+            cursor_y += height as f32;
             last_font_size = font_size;
         }
     }
@@ -185,7 +185,7 @@ impl Slide {
             Ok(file_source) => {
                 use crate::slide_parser::compile_slide;
                 let slideshow_source = remove_comments_from_source(&file_source);
-                let mut new_slide = Slide {
+                let new_slide = Slide {
                     file_name: file_name.to_owned(),
                     current_page: 0,
                     last_modified_time: file_last_modified_time(file_name),
@@ -224,6 +224,7 @@ impl Slide {
     }
 
     // handle errors more explictly...
+    #[allow(dead_code)]
     pub fn file_last_modified_time(&self) -> std::time::SystemTime {
         file_last_modified_time(&self.file_name)
     }

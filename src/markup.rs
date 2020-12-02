@@ -24,6 +24,7 @@ impl Markup {
     }
 
     pub fn get_text_content(&self) -> &str {
+        #[allow(unreachable_patterns)]
         match self {
             Markup::Plain(text_content)|
             Markup::Bold(text_content)|

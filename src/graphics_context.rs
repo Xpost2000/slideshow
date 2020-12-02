@@ -11,7 +11,7 @@ type SDL2WindowContextTextureCreator = sdl2::render::TextureCreator<sdl2::video:
 // Yeah this is not a good idea, but whatever for now.
 
 // TODO: convert this to &str.
-struct SDL2FontAsset<'ttf> {
+pub struct SDL2FontAsset<'ttf> {
     file_name: String,
     stored_sizes : HashMap<u16, sdl2::ttf::Font<'ttf, 'static>>,
 }
@@ -53,7 +53,7 @@ impl<'ttf> SDL2FontAsset<'ttf> {
     }
 }
 
-struct SDL2ImageTextureAsset {
+pub struct SDL2ImageTextureAsset {
     texture: sdl2::render::Texture,
 }
 
@@ -177,7 +177,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                ttf_context : &'ttf sdl2::ttf::Sdl2TtfContext,
                image_context : &'image sdl2::image::Sdl2ImageContext,
                video_subsystem: &'sdl2 sdl2::VideoSubsystem) -> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
-        let mut window_canvas = window.into_canvas().build().unwrap();
+        let window_canvas = window.into_canvas().build().unwrap();
         let texture_creator = window_canvas.texture_creator();
 
         let mut white_texture = texture_creator.create_texture_streaming(sdl2::pixels::PixelFormatEnum::RGB24, 8, 8).unwrap();
@@ -191,7 +191,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                             buffer[pixel_start+2] = 255;
                                         }
                                     }
-                                });
+                                })
+            .expect("failed to build white pixel texture");
 
         SDL2GraphicsContext {
             window_canvas,
@@ -259,9 +260,11 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         let fullscreen_state = self.window().fullscreen_state();
         let window = self.window_mut();
 
-        window.set_size(resolution_pair.0, resolution_pair.1);
+        window.set_size(resolution_pair.0, resolution_pair.1)
+            .expect("failed to resize window.");
+
+        #[allow(unreachable_patterns)]
         match fullscreen_state {
-            _ => {}
             FullscreenType::True | FullscreenType::Desktop => {
                 let new_display_mode =
                     sdl2::video::DisplayMode{
@@ -269,15 +272,17 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                         h: resolution_pair.1 as i32,
                         .. window.display_mode().unwrap()
                     };
-                window.set_display_mode(new_display_mode);
+                window.set_display_mode(new_display_mode)
+                    .expect("failed to resize window via display mode.");
             },
+            _ => {},
         }
     }
 
     pub fn toggle_fullscreen(&mut self) {
         use sdl2::video::FullscreenType;
         let fullscreen_state = self.window().fullscreen_state();
-        let mut window = self.window_mut();
+        let window = self.window_mut();
 
         window.set_fullscreen(
             match fullscreen_state {
@@ -286,7 +291,7 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                     FullscreenType::Off
                 },
             }
-        );
+        ).expect("failed to change window fullscreen state");
     }
 
     pub fn logical_width(&self) -> u32 {
@@ -409,7 +414,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                    Some(sdl2::rect::Rect::new(x as i32,
                                                               y as i32,
                                                               w as u32,
-                                                              h as u32)));
+                                                              h as u32)))
+                    .unwrap();
             },
             None => {},
         }
@@ -445,8 +451,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     }
 
     fn scale_and_transform_xy_pair_to_real(&self, x: f32, y: f32) -> (f32, f32) {
-        let scaling_factor = self.aspect_ratio_scale_factor();
-
         let scaling_factor = self.aspect_ratio_scale_factor();
         let tall_aspect_ratio = self.aspect_ratio() > self.logical_aspect_ratio();
 
@@ -490,7 +494,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     }
 
     pub fn scale_font_size(&self, font_size: u16) -> u16 {
-        let percent = (font_size as f32) / (self.logical_height() as f32);
         (font_size as f32 * self.aspect_ratio_scale_factor()) as u16
     }
 
@@ -510,7 +513,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                        font_size: u16,
                        color: Color,
                        style: sdl2::ttf::FontStyle) {
-        let ttf_context = self.ttf_context;
         let texture_creator = self.window_canvas.texture_creator();
 
         // scale coordinates and such.
@@ -541,7 +543,8 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
                                         Some(sdl2::rect::Rect::new(x as i32,
                                                                    y as i32,
                                                                    width,
-                                                                   height)));
+                                                                   height)))
+                    .unwrap();
                 unsafe{texture.destroy();}
             },
             None => {}
@@ -582,17 +585,18 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     }
 
     pub fn render_filled_rectangle(&mut self, x: f32, y: f32, w: f32, h: f32, color: Color) {
-        let texture_creator = self.window_canvas.texture_creator();
         let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
                                                 (y * self.camera.scale) + self.camera.y);
         let (w, h) = self.scale_xy_pair_to_real(w * self.camera.scale, h * self.camera.scale);
         let white_rectangle = &mut self.white_rectangle_texture;
         white_rectangle.set_blend_mode(sdl2::render::BlendMode::Blend);
         white_rectangle.set_color(color);
+
         self.window_canvas.copy(&white_rectangle.texture, None,
                                 Some(sdl2::rect::Rect::new(x as i32,
                                                            y as i32,
                                                            w as u32,
-                                                           h as u32)));
+                                                           h as u32)))
+            .unwrap();
     }
 }

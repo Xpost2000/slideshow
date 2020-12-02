@@ -23,7 +23,6 @@ pub fn hexadecimal_to_decimal(literal: &str) -> u8 {
     result
 }
 
-use std::convert::TryFrom;
 impl Color {
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
         Color {r, g, b, a}

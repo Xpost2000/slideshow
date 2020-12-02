@@ -30,6 +30,7 @@ pub struct SlideLineCommand <'a> {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Command <'a> {
     Reset, // Total reset
     ResetFont, // TODO think of better thing.

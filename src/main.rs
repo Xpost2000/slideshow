@@ -3,16 +3,17 @@
 
 TODO: Please rewrite the tokenizer.
 */
+#[allow(dead_code)]
 mod markup;
-use self::markup::*;
+#[allow(dead_code)]
 mod utility;
 use self::utility::*;
+#[allow(dead_code)]
 mod graphics_context;
 use self::graphics_context::*;
 mod color;
 use self::color::*;
 mod slide_parser;
-use self::slide_parser::*;
 mod slide;
 use self::slide::*;
 
@@ -80,7 +81,7 @@ impl ApplicationState {
         if let Some(slideshow) = &mut self.slideshow {
             if self.last_write_timer <= 0.0 {
                 self.last_write_timer = DEFAULT_LAST_WRITE_TIMER_INTERVAL;
-                slideshow.reload();
+                slideshow.reload().expect("should be successful.");
             }
         }
         self.last_write_timer -= delta_time;
@@ -165,7 +166,7 @@ impl ApplicationState {
                     skip(self.currently_selected_directory)
                     .take(listings_to_show)
                     .enumerate() {
-                        let is_selected = (index == 0);
+                        let is_selected = index == 0;
                         let directory_string = {
                             let path = path.as_ref().expect("bad permission?").path();
                             let path_name = path.file_name().unwrap() .to_str().unwrap();
@@ -183,7 +184,7 @@ impl ApplicationState {
                             } else {
                                 0.045
                             });
-                        let (width, height) = graphics_context.text_dimensions(default_font, &directory_string, font_size);
+                        let height = graphics_context.text_dimensions(default_font, &directory_string, font_size).1;
 
                         graphics_context.render_text(default_font,
                                                      (((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
@@ -222,7 +223,6 @@ impl ApplicationState {
                                                        COLOR_WHITE,
                                                        sdl2::ttf::FontStyle::NORMAL);
                 let resolutions = graphics_context.get_avaliable_resolutions();
-                let resolution_count = resolutions.iter().count();
                 let resolutions_to_show = 8; 
 
                 let mut draw_cursor_y : f32 = (heading_font_size*2) as f32;
@@ -288,7 +288,7 @@ impl ApplicationState {
                         },
                         SlideTransitionType::FadeTo(color) => {
                             // split time into two halves.
-                            let half_max_time = (transition.finish_time / 2.0);
+                            let half_max_time = transition.finish_time / 2.0;
                             let ease_function = transition.easing_function;
                             let fraction_of_completion = transition.finished_fraction();
                             let (alpha, page_to_draw) = {
@@ -484,7 +484,7 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::R), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                slideshow.reload();
+                                slideshow.reload().expect("should be successful");
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
@@ -532,9 +532,8 @@ fn main() {
                                                         &sdl2_ttf_context,
                                                         &sdl2_image_context,
                                                         &video_subsystem);
-    let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
+    graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
     // let dumb_test_texture = graphics_context.add_image("data/res/rust-logo-png-transparent.png");
-    let resolutions = graphics_context.get_avaliable_resolutions();
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
 
