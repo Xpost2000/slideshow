@@ -5,6 +5,10 @@ use crate::slide::*;
 use crate::utility::*;
 
 pub struct SlideSettingsContext {
+    pub current_line: u32,
+    pub current_x: Option<f32>,
+    pub current_y: Option<f32>,
+
     pub current_background_color: Color,
     pub current_element_color: Color,
     pub current_font_size: u16,
@@ -14,11 +18,30 @@ pub struct SlideSettingsContext {
 impl Default for SlideSettingsContext {
     fn default() -> SlideSettingsContext {
         SlideSettingsContext{
+            current_line: 0,
+            current_x: None,
+            current_y: None,
             current_background_color: COLOR_WHITE,
             current_element_color: COLOR_BLACK,
             current_font_size: 48,
             current_font_path: None,
         }
+    }
+}
+
+impl SlideSettingsContext {
+    fn y(&self) -> Option<f32> {
+        self.current_y
+    }
+
+    fn x(&self) -> Option<f32> {
+        self.current_x
+    }
+
+    fn set_position(&mut self, x: Option<f32>, y: Option<f32>) {
+        self.current_x = x;
+        self.current_y = y;
+        self.current_line = 0;
     }
 }
 
@@ -29,10 +52,11 @@ pub struct SlideLineCommand <'a> {
     pub args: Vec<&'a str>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum Command <'a> {
     Reset, // Total reset
+    ResetPosition,
     ResetFont, // TODO think of better thing.
     SetFont(&'a str),
     SetBackgroundColor(Color),
@@ -40,6 +64,8 @@ pub enum Command <'a> {
     SetFontSize(u16),
     SetVirtualResolution(u32, u32),
     SetTransition(SlideTransition),
+    SetPosition(Option<f32>, Option<f32>),
+    InsertImage(bool, &'a str, Option<f32>, Option<f32>),
 }
 
 // TODO!
@@ -50,8 +76,31 @@ pub fn execute_command(context: &mut SlideSettingsContext, command: Command) {
         Command::SetFontSize(font_size) => {context.current_font_size = font_size;}
         // the compiled slide should not depend on the source...
         Command::SetFont(font_name) => {context.current_font_path = Some(font_name.to_owned());},
+        Command::ResetPosition => {context.set_position(None, None);}
         Command::ResetFont => {context.current_font_path = None;},
+        Command::SetPosition(x, y) => {context.set_position(x,y);},
         _ => { println!("{:?} is an unknown command or not handled here", command); }
+    }
+}
+
+pub fn execute_command_on_page(context: &mut SlideSettingsContext, command: Command, page: &mut Page) {
+    match command {
+        Command::InsertImage(background, path, width, height) => {
+            page.elements.push(
+                SlideElement::Image(
+                    ImageElement {
+                        location: path.to_owned(),
+                        x: context.x(),
+                        y: context.y(),
+                        background,
+                        w: width,
+                        h: height,
+                        color: context.current_element_color,
+                    }
+                )
+            );
+        },
+        _ => { execute_command(context, command); }
     }
 }
 
@@ -63,15 +112,24 @@ pub fn handle_command(context: &mut SlideSettingsContext, command: SlideLineComm
     }
 }
 
+pub fn handle_command_with_page(context: &mut SlideSettingsContext,
+                                command: SlideLineCommand,
+                                page: &mut Page) {
+    let command = parse_single_command(command);
+    if let Some(command) = command {
+        execute_command_on_page(context, command, page);
+    }
+}
+
 pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page {
-    let mut current_line : u32 = 0;
     let mut new_page : Page = Page::default();
+    context.current_line = 0;
+    let mut current_line = 0;
 
     for line in page_lines {
         if let Some(commands) = parse_slide_command(&line) {
             for command in commands {
-                handle_command(context, command);
-                // update page properties based on command...
+                handle_command_with_page(context, command, &mut new_page);
                 {
                     new_page.background_color = context.current_background_color;
                 }
@@ -79,27 +137,35 @@ pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> 
         } else {
             const REPLACE_TABS_WITH_N_SPACES : &'static str = "    ";
             if line.len() >= 1 {
-                new_page.text_elements.push(TextElement{
-                    x: 0.0,
-                    y: current_line as f32,
-                    text: String::from(
-                        if let Some('$') = line.chars().nth(0) {
-                            &line[1..]
-                        } else {
-                            &line
-                        }
-                    ).replace('\t', REPLACE_TABS_WITH_N_SPACES),
-                    font_size: context.current_font_size,
-                    font_name: context.current_font_path.clone(),
-                    color: context.current_element_color
-                });
+                new_page.elements.push(
+                    SlideElement::Text(
+                        TextElement{
+                            x: context.x(),
+                            y: context.y(),
+
+                            // line_breaks: context.current_line,
+                            line_breaks: current_line,
+                            text: String::from(
+                                if let Some('$') = line.chars().nth(0) {
+                                    &line[1..]
+                                } else {
+                                    &line
+                                }
+                            ).replace('\t', REPLACE_TABS_WITH_N_SPACES),
+                            font_size: context.current_font_size,
+                            font_name: context.current_font_path.clone(),
+                            color: context.current_element_color
+                        }));
+                context.current_line = 0;
                 current_line = 0;
             } else {
+                context.current_line += 1;
                 current_line += 1;
             }
         }
     }
 
+    context.set_position(None, None);
     new_page
 }
 
@@ -114,6 +180,74 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
     let mut args = command.args.iter();
 
     match command.name {
+        "reset-position" => {
+            Some(Command::ResetPosition)
+        },
+        "image" | "bkimage" => {
+            if let Some(image_resource_path) = args.next() {
+                let is_non_interfering = match command.name {
+                    "image" => false,
+                    "bkimage" => true,
+                    _ => false
+                };
+
+                let width = {
+                    if let Some(width_string) = args.next() {
+                        match *width_string {
+                            _ =>
+                                if let Ok(result) = width_string.parse::<f32>() {
+                                    Some(result)
+                                } else {
+                                    None
+                                },
+                        }
+                    } else {
+                        None
+                    }
+                };
+
+                let height = {
+                    if let Some(height_string) = args.next() {
+                        match *height_string {
+                            _ =>
+                                if let Ok(result) = height_string.parse::<f32>() {
+                                    Some(result)
+                                } else {
+                                    None
+                                },
+                        }
+                    } else {
+                        None
+                    }
+                };
+
+                Some(Command::InsertImage(is_non_interfering,
+                                          image_resource_path,
+                                          width,
+                                          height))
+            } else {
+                None
+            }
+        },
+        "set-position" => {
+            let x = {
+                let x_string = args.next().unwrap_or(&"current");
+                match *x_string {
+                    "current" => None,
+                    _ => Some(x_string.parse::<f32>().unwrap_or(0.0))
+                }
+            };
+
+            let y = {
+                let y_string = args.next().unwrap_or(&"current");
+                match *y_string {
+                    "current" => None ,
+                    _ => Some(y_string.parse::<f32>().unwrap_or(0.0))
+                }
+            };
+
+            Some(Command::SetPosition(x, y))
+        },
         "color" | "background_color" => {
             if let Some(next) = &args.next() {
                 let color = Color::try_from(**next).unwrap_or(COLOR_BLACK);
@@ -243,12 +377,11 @@ pub fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
                                 if let Some(end) = end {
                                     let string_literal = &line[start..(start+end)];
                                     tokenized_first_pass.push(string_literal);
-                                    // char_iterator.skip(end);
                                     for _ in 0..end { char_iterator.next(); }
                                 }
                             },
-                            _ => {
-                            }
+                            ':' => {tokenized_first_pass.push(":");}
+                            _ => {}
                         }
                     },
                     None => {
@@ -300,7 +433,7 @@ pub fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
                             _ => { break; },
                         }
                     }
-                    commands.push(SlideLineCommand{ name, args});
+                    commands.push(SlideLineCommand{ name, args });
                 }
             }
         }

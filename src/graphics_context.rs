@@ -106,14 +106,16 @@ impl SDL2ImageTextureAssets {
 
     fn insert(&mut self, path: &str) {
         use sdl2::image::LoadSurface;
-        let surface_image = sdl2::surface::Surface::from_file(path).unwrap();
 
-        self.images.insert(path.to_owned(),
-                           SDL2ImageTextureAsset{
-                               texture: {
-                                   self.texture_creator.create_texture_from_surface(surface_image).unwrap()
-                               }
-                           });
+        if !self.images.contains_key(path) {
+            let surface_image = sdl2::surface::Surface::from_file(path).unwrap();
+            self.images.insert(path.to_owned(),
+                               SDL2ImageTextureAsset{
+                                   texture: {
+                                       self.texture_creator.create_texture_from_surface(surface_image).unwrap()
+                                   }
+                               });
+        }
     }
 }
 
@@ -426,6 +428,10 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         I'm fairly certain I don't have to do something like this... Should probably
         google this further.
          */
+        let (x, y) = self.scale_xy_pair_to_real((x * self.camera.scale) + self.camera.x,
+                                                (y * self.camera.scale) + self.camera.y);
+        let (w, h) = self.scale_xy_pair_to_real(w * self.camera.scale, h * self.camera.scale);
+
         let &mut SDL2GraphicsContext { ref mut window_canvas, ref image_assets, .. } = self;
         match image_assets.get(image_id) {
             Some(texture) => {

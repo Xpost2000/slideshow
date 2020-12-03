@@ -7,14 +7,29 @@ $color:#444444
 $font-size: 32
                                                       Jerry Presents:
 $color:#333333
-$font-size: 122
-          STUPID
-      SLIDESHOW
-$color:#777777
-$font-size: 48
-               A stupid slideshow program in Rust,
-               Yeah as of this version there's no layout
-               or alignment, so it's done by hand :(
+$font-size: 38
+This is some Fancy Text
+$color:#00FF00FF
+$set-position:200:current
+$image:"data/res/rust-logo-png-transparent.png":128.0:128.0
+$color:#333333
+$set-position:0:current
+This will be under the image
+s
+This is some Fancy Text
+This will be over the image
+$color:#FF0000FF
+$bkimage:"data/res/rust-logo-png-transparent.png":256.0:256.0
+$color:#000000FF
+$set-position:200:current
+$image:"data/res/rust-logo-png-transparent.png":256.0:256.0
+$color:#FF00FF
+$set-position:200:500
+*El BJdenon*
+$set-position:500:300
+$font-size:90
+$color:#00FF00FF
+_I can fly mom!_
 $end_page
 
 $page

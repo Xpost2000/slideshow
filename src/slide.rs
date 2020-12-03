@@ -1,55 +1,44 @@
 // TODO
-use std::hash::{Hash, Hasher};
 use crate::utility::*;
 use crate::color::*;
 
 #[derive(Debug, Clone)]
 pub struct TextElement {
     /*font?*/
-    pub x: f32,
-    pub y: f32, // TODO: Rename to linebreaks between. Or something
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub line_breaks: u32,
     pub text: String, // In the case I allow variables or something...
     pub color: Color,
     pub font_size: u16,
     pub font_name: Option<String>,
 }
-impl Hash for TextElement {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        fn canonicalize_position(e: &TextElement) -> (i32, i32) {
-            (e.x.round() as i32, e.y.round() as i32)
-        }
-
-        canonicalize_position(self).hash(state);
-        self.text.hash(state);
-        self.color.hash(state);
-        self.font_size.hash(state);
-        self.font_name.hash(state);
-    }
+#[derive(Debug, Clone)]
+pub struct ImageElement {
+    pub background: bool, // whether it affects layout...
+    pub location: String,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub w: Option<f32>,
+    pub h: Option<f32>,
+    pub color: Color,
 }
-#[derive(Debug, Hash, Clone)]
+
+#[derive(Debug, Clone)]
+pub enum SlideElement {
+    Text(TextElement),
+    Image(ImageElement),
+}
+
+#[derive(Debug, Clone)]
 pub struct Page {
     pub background_color: Color,
-    /*
-    A Page is probably just going to consist of "elements"
-    
-    Like a TextElement
-    and ImageElement
-    and ShapeElement
-    or whatever primitives I want to add...
-     */
-    pub text_elements: Vec<TextElement>,
+    pub elements: Vec<SlideElement>,
 }
 
 use crate::graphics_context::*;
 
 impl Page {
-    fn calculate_hash(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        let mut hasher_state = DefaultHasher::new();
-        self.hash(&mut hasher_state);
-        hasher_state.finish()
-    }
-
     pub fn render(&self,
                   graphics_context: &mut SDL2GraphicsContext,
                   default_font: &str) {
@@ -60,55 +49,124 @@ impl Page {
                                                  self.background_color);
 
         let mut last_font_size : u16 = 0;
+        let mut cursor_x : f32 = 0.0;
         let mut cursor_y : f32 = 0.0;
 
-        for text in &self.text_elements {
-            let font_size = text.font_size;
-            let mut cursor_x : f32 = 0.0;
+        let mut cursor_x_baseline: f32 = 0.0;
+        let mut cursor_y_baseline: Option<f32> = None;
 
-            let markup_lexer = MarkupLexer::new(&text.text);
-            let drawn_font =
-                if let Some(font) = &text.font_name {
-                    graphics_context.add_font(font)
-                } else {
-                    default_font 
-                };
+        for element in &self.elements {
+            match element {
+                SlideElement::Text(text) => {
+                    let font_size = text.font_size;
+                    cursor_x_baseline = match text.x {
+                        Some(x) => x,
+                        None => 0.0,
+                    };
 
-            let height = graphics_context.text_dimensions(drawn_font, &text.text, font_size).1;
-            if last_font_size == 0 { last_font_size = height as u16; }
-            cursor_y += last_font_size as f32 * text.y;
+                    cursor_x = cursor_x_baseline;
 
-            for markup in markup_lexer {
-                let text_content = markup.get_text_content();
-                let width = graphics_context.render_static_text(drawn_font,
-                                                                cursor_x, cursor_y,
-                                                                text_content,
-                                                                font_size,
-                                                                text.color,
-                                                                markup.get_text_drawing_style());
-                // render decoration
-                match markup {
-                    Markup::Strikethrough(_) => {
-                        graphics_context.render_filled_rectangle(cursor_x,
-                                                                 cursor_y + (font_size as f32 / 1.8),
-                                                                 width as f32,
-                                                                 font_size as f32 / 10.0,
-                                                                 text.color);
+                    if let Some(baseline_y) = text.y {
+                        if cursor_y_baseline.is_none() {
+                            cursor_y_baseline = Some(baseline_y);
+                            cursor_y = cursor_y_baseline.unwrap();
+                        } else {
+                            if baseline_y != cursor_y_baseline.unwrap() {
+                                cursor_y_baseline = Some(baseline_y);
+                                cursor_y = cursor_y_baseline.unwrap();
+                            }
+                        }
                     }
-                    Markup::Underlined(_) => {
-                        graphics_context.render_filled_rectangle(cursor_x,
-                                                                 cursor_y + (font_size as f32),
-                                                                 width as f32,
-                                                                 font_size as f32 / 13.0,
-                                                                 text.color);
+
+                    let markup_lexer = MarkupLexer::new(&text.text);
+                    let drawn_font =
+                        if let Some(font) = &text.font_name {
+                            graphics_context.add_font(font)
+                        } else {
+                            default_font 
+                        };
+
+                    let height = graphics_context.text_dimensions(drawn_font, &text.text, font_size).1;
+                    if last_font_size == 0 { last_font_size = height as u16; }
+                    cursor_y += last_font_size as f32 * text.line_breaks as f32;
+
+                    for markup in markup_lexer {
+                        let text_content = markup.get_text_content();
+                        let width = graphics_context.render_static_text(drawn_font,
+                                                                        cursor_x, cursor_y,
+                                                                        text_content,
+                                                                        font_size,
+                                                                        text.color,
+                                                                        markup.get_text_drawing_style());
+                        // render decoration
+                        match markup {
+                            Markup::Strikethrough(_) => {
+                                graphics_context.render_filled_rectangle(cursor_x,
+                                                                         cursor_y + (font_size as f32 / 1.8),
+                                                                         width as f32,
+                                                                         font_size as f32 / 10.0,
+                                                                         text.color);
+                            }
+                            Markup::Underlined(_) => {
+                                graphics_context.render_filled_rectangle(cursor_x,
+                                                                         cursor_y + (font_size as f32),
+                                                                         width as f32,
+                                                                         font_size as f32 / 13.0,
+                                                                         text.color);
+                            }
+                            _ => {},
+                        }
+                        cursor_x += width as f32;
                     }
-                    _ => {},
-                }
-                cursor_x += (width) as f32;
+                    cursor_y += height as f32;
+                    last_font_size = font_size;
+                    cursor_x = cursor_x_baseline;
+                },
+                SlideElement::Image(image) => {
+                    let texture = graphics_context.add_image(&image.location);
+                    let image_dimensions = graphics_context.image_dimensions(texture);
+
+                    if let Some(baseline_y) = image.y {
+                        if cursor_y_baseline.is_none() {
+                            cursor_y_baseline = Some(baseline_y);
+                            cursor_y = cursor_y_baseline.unwrap();
+                        } else {
+                            if baseline_y != cursor_y_baseline.unwrap() {
+                                cursor_y_baseline = Some(baseline_y);
+                                cursor_y = cursor_y_baseline.unwrap();
+                            }
+                        }
+                    }
+
+                    if let Some(x) = image.x {
+                        cursor_x = x;
+                    }
+
+                    let image_width = match image.w {
+                        Some(w) => w,
+                        None => image_dimensions.0 as f32,
+                    };
+                    let image_height = match image.h {
+                        Some(h) => h,
+                        None => image_dimensions.1 as f32,
+                    };
+                    graphics_context.render_image(texture,
+                                                  cursor_x,
+                                                  cursor_y,
+                                                  image_width,
+                                                  image_height,
+                                                  image.color);
+
+                    if !image.background {
+                        cursor_y +=
+                            match image.y {
+                                None => image_height,
+                                Some(y) => y,
+                            };
+                    }
+                },
+                _ => unimplemented!("????")
             }
-
-            cursor_y += height as f32;
-            last_font_size = font_size;
         }
     }
 }
@@ -117,7 +175,7 @@ impl Default for Page {
     fn default() -> Page {
         Page {
             background_color: COLOR_WHITE,
-            text_elements: Vec::new()
+            elements: Vec::new()
         }
     }
 }
@@ -129,7 +187,7 @@ pub enum SlideTransitionType {
     FadeTo(Color),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SlideTransition {
     pub transition_type: SlideTransitionType, // type is keyword :(
     pub easing_function: EasingFunction,
@@ -162,15 +220,7 @@ impl Default for Slide {
         Slide {
             file_name: String::new(),
             pages: Vec::new(),
-            // transition: None,
-            transition: Some(
-                SlideTransition {
-                    // transition_type: SlideTransitionType::HorizontalSlide,
-                    transition_type: SlideTransitionType::FadeTo(COLOR_BLACK),
-                    easing_function: EasingFunction::Linear,
-                    time: 0.0,
-                    finish_time: 1.0
-                }),
+            transition: None,
             current_page: isize::default(),
             last_modified_time: std::time::SystemTime::now(),// eh...
             resolution: (1280, 720),
@@ -227,13 +277,7 @@ impl Slide {
     pub fn file_last_modified_time(&self) -> std::time::SystemTime {
         file_last_modified_time(&self.file_name)
     }
-    /*
-    This will load and keep the current page around something with a similar hash.
-    If it has the same page count it will reliably return the same page but modified.
 
-    The hash idea isn't very great, but might be okay if I replace it with a similarity
-    score system or something.
-     */
     pub fn reload(&mut self) -> Result<(), ()> {
         let previous_page_count = self.len();
         let previous_current_page = self.current_page();
@@ -245,26 +289,8 @@ impl Slide {
                     *self = slide;
                     self.current_page = previous_current_page;
                 } else {
-                    let current_page_hash = self.get_current_page()
-                        .expect("should have page...").calculate_hash();
-                    let mut hash_delta: u64 = std::u64::MAX;
-                    let mut closest_hash_and_index: (u64, usize) = (0, 0);
-                    for (index, page) in slide.pages.iter().enumerate() {
-                        let page_hash = page.calculate_hash();
-                        if page_hash == current_page_hash {
-                            closest_hash_and_index = (current_page_hash, index);
-                            break;
-                        } else {
-                            let min = std::cmp::min(page_hash, current_page_hash);
-                            let max = std::cmp::max(page_hash, current_page_hash);
-                            if (max - min) < hash_delta {
-                                hash_delta = max - min;
-                                closest_hash_and_index = (page_hash, index);
-                            }
-                        }
-                    }
                     *self = slide;
-                    self.current_page = closest_hash_and_index.1 as isize;
+                    self.current_page = 0;
                 }
             }
             Ok(())
