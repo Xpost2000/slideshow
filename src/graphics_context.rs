@@ -517,14 +517,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         (font_size as f32 * self.aspect_ratio_scale_factor()) as u16
     }
 
-    // This will get the virtual resolution
-    pub fn logical_text_dimensions(&mut self, font_id: &str, text: &str, font_size: u16) -> (u32, u32) {
-        let font_size = self.scale_font_size(font_size);
-        let result = self.text_dimensions(font_id, text, font_size);
-        let (w, h) = self.scale_xy_pair_to_logical(result.0 as f32, result.1 as f32);
-        (w as u32, h as u32)
-    }
-
     fn draw_string_texture(&mut self,
                            font_id: &str,
                            text: &str,
