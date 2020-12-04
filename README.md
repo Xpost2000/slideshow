@@ -16,7 +16,7 @@ It does the following:
 It's also kind of convenient for me since I don't have Microsoft Powerpoint so I can use this to make
 basically presentable slides.
 
-This thing depends on sdl2-rs and uses [Libre Baskerville] (https://fonts.google.com/specimen/Libre+Baskerville)
+This thing depends on sdl2-rs and uses [Libre Baskerville](https://fonts.google.com/specimen/Libre+Baskerville)
 as the default font.
 
 It includes a dummy slideshow that was used for testing but also demonstrates the format of the slides used.
