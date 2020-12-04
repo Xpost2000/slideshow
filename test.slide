@@ -1,4 +1,4 @@
-# Slide Format
+﻿# Slide Format
 $background_color:#FFFFFF
 $resolution:1280:720
 $transition:vertical_slide:cubic_ease_out:3.25

@@ -49,7 +49,6 @@ fn main() {
                                                         &sdl2_image_context,
                                                         &video_subsystem);
     graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
-    // let dumb_test_texture = graphics_context.add_image("data/res/rust-logo-png-transparent.png");
 
     let mut event_pump = sdl2_context.event_pump().unwrap();
 
@@ -59,11 +58,14 @@ fn main() {
 
     let mut sdl2_timer = sdl2_context.timer().unwrap();
     let mut delta_time = 0;
-    graphics_context.enable_alpha_blending();
+
     'running: loop {
         let start_time = sdl2_timer.ticks();
+
         graphics_context.clear_color(Color::new(0, 0, 0, 255));
+        graphics_context.enable_alpha_blending();
         graphics_context.use_viewport_default();
+
         if let ApplicationScreen::Quit(_) = application_state.state {
             break 'running;
         } else {
@@ -73,9 +75,12 @@ fn main() {
             application_state.update(delta_time);
             application_state.draw(&mut graphics_context);
         }
+
         graphics_context.present();
+
         let end_time = sdl2_timer.ticks();
         delta_time = end_time - start_time;
+
         #[cfg(debug_assertions)]
         {println!("{}", 1.0/(delta_time as f32/1000.0));}
     }
