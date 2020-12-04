@@ -1,3 +1,4 @@
+#![windows_subsystem="windows"]
 /*
     beginnings of a slideshow program?
 
@@ -24,14 +25,32 @@ const DEFAULT_WINDOW_WIDTH : u32 = 1024;
 const DEFAULT_WINDOW_HEIGHT : u32 = 768;
 const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
 
-#[derive(Clone, Copy)]
+trait ApplicationScreenState {
+    fn handle_event(&mut self,
+                    graphics_context: &mut SDL2GraphicsContext,
+                    event_pump: &mut sdl2::EventPump) {
+    }
+    fn draw(&self, graphics_context: &mut SDL2GraphicsContext) {
+    }
+    fn update(&mut self, delta_time: f32) {
+    }
+}
+
+// Unit structs for trait implementation.
+struct InvalidOrNoSlideState;
+struct OptionsState;
+struct ShowingSlideState;
+struct SelectSlideToLoadState;
+struct ChangePageState {from: isize, to: isize,}
+struct QuitState;
+
 enum ApplicationScreen {
-    InvalidOrNoSlide,
-    Options,
-    ShowingSlide,
-    SelectSlideToLoad,
-    ChangePage(isize, isize),
-    Quit,
+    InvalidOrNoSlide(InvalidOrNoSlideState),
+    Options(OptionsState),
+    ShowingSlide(ShowingSlideState),
+    SelectSlideToLoad(SelectSlideToLoadState),
+    ChangePage(ChangePageState),
+    Quit(QuitState),
 }
 
 const DEFAULT_LAST_WRITE_TIMER_INTERVAL : f32 = 0.20;
@@ -52,7 +71,7 @@ struct ApplicationState {
 impl ApplicationState {
     fn new(command_line_arguments: &Vec<String>) -> ApplicationState {
         ApplicationState {
-            state: ApplicationScreen::ShowingSlide,
+            state: ApplicationScreen::ShowingSlide(ShowingSlideState),
             current_working_directory: std::path::PathBuf::from("./").canonicalize().unwrap(),
             currently_selected_resolution: 0,
             currently_selected_directory: 0,
@@ -87,25 +106,27 @@ impl ApplicationState {
         self.last_write_timer -= delta_time;
 
         match self.state {
-            ApplicationScreen::Quit | ApplicationScreen::InvalidOrNoSlide |
-            ApplicationScreen::Options => {},
-            ApplicationScreen::SelectSlideToLoad => {
+            ApplicationScreen::Quit(_) | ApplicationScreen::InvalidOrNoSlide(_) |
+            ApplicationScreen::Options(_) => {},
+            ApplicationScreen::SelectSlideToLoad(_) => {
             },
-            ApplicationScreen::ShowingSlide => {
+            ApplicationScreen::ShowingSlide(_) => {
                 if let None = &self.slideshow {
-                    self.state = ApplicationScreen::InvalidOrNoSlide;
+                    self.state = ApplicationScreen::InvalidOrNoSlide(InvalidOrNoSlideState);
                 }
             },
-            ApplicationScreen::ChangePage(first, second) => {
+            ApplicationScreen::ChangePage(ChangePageState{from, to}) => {
+                let first = from;
+                let second = to;
                 if let Some(slideshow) = &mut self.slideshow {
                     let valid_transition = slideshow.get(first as usize).is_some() && slideshow.get(second as usize).is_some();
                     if let None = slideshow.transition {
-                        self.state = ApplicationScreen::ShowingSlide;
+                        self.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                     } else if let Some(transition) = &mut slideshow.transition {
                         if valid_transition && !transition.finished_transition() {
                             transition.time += delta_time;
                         } else {
-                            self.state = ApplicationScreen::ShowingSlide;
+                            self.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                             transition.time = 0.0;
                         }
                     }
@@ -118,7 +139,7 @@ impl ApplicationState {
         let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
 
         match self.state {
-            ApplicationScreen::Quit => {},
+            ApplicationScreen::Quit(_) => {},
             /*
             TODO: I can see a way of refactoring this out
             into a menu trait that depends on something that can turn into
@@ -127,7 +148,7 @@ impl ApplicationState {
             I don't need a real GUI or anything so this honestly works just fine, and probably just looks
             plain nicer to have.
              */
-            ApplicationScreen::SelectSlideToLoad => {
+            ApplicationScreen::SelectSlideToLoad(_) => {
                 graphics_context.logical_resolution = VirtualResolution::Display;
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
                 let heading_font_size = graphics_context.font_size_percent(0.08);
@@ -200,7 +221,7 @@ impl ApplicationState {
                         draw_cursor_y += height as f32;
                     }
             },
-            ApplicationScreen::InvalidOrNoSlide => {
+            ApplicationScreen::InvalidOrNoSlide(_) => {
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
                 graphics_context.logical_resolution = VirtualResolution::Display;
                 graphics_context.render_text_justified(default_font,
@@ -211,7 +232,7 @@ impl ApplicationState {
                                                        COLOR_WHITE,
                                                        sdl2::ttf::FontStyle::NORMAL);
             },
-            ApplicationScreen::Options => {
+            ApplicationScreen::Options(_) => {
                 graphics_context.logical_resolution = VirtualResolution::Display;
                 graphics_context.clear_color(Color::new(10, 10, 16, 255));
                 let heading_font_size = graphics_context.font_size_percent(0.08);
@@ -256,7 +277,9 @@ impl ApplicationState {
                     draw_cursor_y += font_size as f32;
                 }
             },
-            ApplicationScreen::ChangePage(first, second) => {
+            ApplicationScreen::ChangePage(ChangePageState{from, to}) => {
+                let first = from;
+                let second = to;
                 #[cfg(debug_assertions)]
                 graphics_context.clear_color(Color::new(255, 0, 0, 255));
                 let slideshow = &self.slideshow.as_ref().unwrap();
@@ -319,7 +342,7 @@ impl ApplicationState {
                     }
                 }
             },
-            ApplicationScreen::ShowingSlide => {
+            ApplicationScreen::ShowingSlide(_) => {
                 if let Some(slideshow) = &self.slideshow {
                     // graphics_context.camera.set_position(0.0, 0.0);
                     graphics_context.camera.x = 0.0;
@@ -331,17 +354,17 @@ impl ApplicationState {
         }
     }
 
-    fn handle_input(&mut self, graphics_context: &mut SDL2GraphicsContext, event_pump: &mut sdl2::EventPump, delta_time: f32) {
+    fn handle_event(&mut self, graphics_context: &mut SDL2GraphicsContext, event_pump: &mut sdl2::EventPump, delta_time: f32) {
         match self.state {
-            ApplicationScreen::Quit => {},
-            ApplicationScreen::SelectSlideToLoad => {
+            ApplicationScreen::Quit(_) => {},
+            ApplicationScreen::SelectSlideToLoad(_) => {
                 let directory_listing = std::fs::read_dir(&self.current_working_directory).expect("Failed to get directory listing?");
                 self.currently_selected_directory = clamp(self.currently_selected_directory,
                                                           0, directory_listing.into_iter().count()-1);
                 for event in event_pump.poll_iter() {
                     match event {
                         SDLEvent::Quit {..} => {
-                            self.state = ApplicationScreen::Quit;
+                            self.state = ApplicationScreen::Quit(QuitState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Return), .. } |
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. }  =>  {
@@ -361,7 +384,7 @@ impl ApplicationState {
                                     let new_slide = Slide::new_from_file(path.path().to_str().expect("bad unicode"));
                                     self.slideshow = new_slide;
 
-                                    self.state = ApplicationScreen::ShowingSlide;
+                                    self.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                                 }
                             }
                         },
@@ -378,35 +401,35 @@ impl ApplicationState {
                             self.currently_selected_directory += 1;
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
-                            self.state = ApplicationScreen::Options;
+                            self.state = ApplicationScreen::Options(OptionsState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
-                            self.state = ApplicationScreen::ShowingSlide;
+                            self.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                         },
                         _ => {}
                     }
                 }
             },
-            ApplicationScreen::InvalidOrNoSlide => {
+            ApplicationScreen::InvalidOrNoSlide(_) => {
                 for event in event_pump.poll_iter() {
                     match event {
                         SDLEvent::Quit {..} => {
-                            self.state = ApplicationScreen::Quit;
+                            self.state = ApplicationScreen::Quit(QuitState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
-                            self.state = ApplicationScreen::Quit;
+                            self.state = ApplicationScreen::Quit(QuitState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
-                            self.state = ApplicationScreen::Options;
+                            self.state = ApplicationScreen::Options(OptionsState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
-                            self.state = ApplicationScreen::SelectSlideToLoad;
+                            self.state = ApplicationScreen::SelectSlideToLoad(SelectSlideToLoadState);
                         },
                         _ => {}
                     }
                 }
             },
-            ApplicationScreen::Options => {
+            ApplicationScreen::Options(_) => {
                 let resolutions = graphics_context.get_avaliable_resolutions();
                 let resolution_count = resolutions.iter().count();
                 self.currently_selected_resolution = clamp(self.currently_selected_resolution,
@@ -414,7 +437,7 @@ impl ApplicationState {
                 for event in event_pump.poll_iter() {
                     match event {
                         SDLEvent::Quit {..} => {
-                            self.state = ApplicationScreen::Quit;
+                            self.state = ApplicationScreen::Quit(QuitState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
                             graphics_context.toggle_fullscreen();
@@ -434,23 +457,23 @@ impl ApplicationState {
                             self.currently_selected_resolution += 1;
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
-                            self.state = ApplicationScreen::ShowingSlide;
+                            self.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
-                            self.state = ApplicationScreen::SelectSlideToLoad;
+                            self.state = ApplicationScreen::SelectSlideToLoad(SelectSlideToLoadState);
                         },
                         _ => {}
                     }
                 }
             },
-            ApplicationScreen::ChangePage(_, _) => {
+            ApplicationScreen::ChangePage(_) => {
                 for event in event_pump.poll_iter() {
                     match event {
                         SDLEvent::Quit {..} => {
-                            self.state = ApplicationScreen::Quit;
+                            self.state = ApplicationScreen::Quit(QuitState);
                         },
                         SDLEvent::KeyDown {..} => {
-                            self.state = ApplicationScreen::ShowingSlide;
+                            self.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                             if let Some(slideshow) = &mut self.slideshow {
                                 slideshow.finish_transition();
                             }
@@ -459,16 +482,16 @@ impl ApplicationState {
                     }
                 }
             }
-            ApplicationScreen::ShowingSlide => {
+            ApplicationScreen::ShowingSlide(_) => {
                 for event in event_pump.poll_iter() {
                     match event {
                         SDLEvent::Quit {..} => {
-                            self.state = ApplicationScreen::Quit;
+                            self.state = ApplicationScreen::Quit(QuitState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Escape), .. } =>  {
                             graphics_context.clear_resources();
                             self.slideshow = None;
-                            self.state = ApplicationScreen::InvalidOrNoSlide;
+                            self.state = ApplicationScreen::InvalidOrNoSlide(InvalidOrNoSlideState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
                             graphics_context.toggle_fullscreen();
@@ -493,21 +516,27 @@ impl ApplicationState {
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Right), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                self.state = ApplicationScreen::ChangePage(slideshow.current_page(),
-                                                                           slideshow.next_page());
+                                self.state = ApplicationScreen::ChangePage(
+                                    ChangePageState{
+                                        from: slideshow.current_page(),
+                                        to: slideshow.next_page()
+                                    });
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::Left), .. } => {
                             if let Some(slideshow) = &mut self.slideshow {
-                                self.state = ApplicationScreen::ChangePage(slideshow.current_page(),
-                                                                           slideshow.previous_page());
+                                self.state = ApplicationScreen::ChangePage(
+                                    ChangePageState{
+                                        from: slideshow.current_page(),
+                                        to: slideshow.previous_page()
+                                    });
                             }
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
-                            self.state = ApplicationScreen::SelectSlideToLoad;
+                            self.state = ApplicationScreen::SelectSlideToLoad(SelectSlideToLoadState);
                         },
                         SDLEvent::KeyDown { keycode: Some(SDLKeycode::O), .. } => {
-                            self.state = ApplicationScreen::Options;
+                            self.state = ApplicationScreen::Options(OptionsState);
                         },
                         _ => {}
                     }
@@ -552,12 +581,12 @@ fn main() {
         let start_time = sdl2_timer.ticks();
         graphics_context.clear_color(Color::new(0, 0, 0, 255));
         graphics_context.use_viewport_default();
-        if let ApplicationScreen::Quit = application_state.state {
+        if let ApplicationScreen::Quit(_) = application_state.state {
             break 'running;
         } else {
             let delta_time = delta_time as f32 / 1000.0;
 
-            application_state.handle_input(&mut graphics_context, &mut event_pump, delta_time);
+            application_state.handle_event(&mut graphics_context, &mut event_pump, delta_time);
             application_state.update(delta_time);
             application_state.draw(&mut graphics_context);
         }
