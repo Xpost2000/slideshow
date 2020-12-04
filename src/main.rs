@@ -16,14 +16,15 @@ mod color;
 use self::color::*;
 mod slide_parser;
 mod slide;
-use self::slide::*;
-mod application_states;
-use self::application_states::*;
 mod application;
 use self::application::*;
 
-use sdl2::event::Event as SDLEvent;
-use sdl2::keyboard::Keycode as SDLKeycode;
+mod application_states;
+mod invalid_or_no_slide_state;
+mod options_state;
+mod change_page_state;
+mod showing_slide_state;
+mod select_slide_to_load_state;
 
 const DEFAULT_WINDOW_WIDTH : u32 = 1024;
 const DEFAULT_WINDOW_HEIGHT : u32 = 768;
@@ -38,7 +39,9 @@ fn main() {
     let sdl2_image_context = sdl2::image::init(sdl2::image::InitFlag::PNG | sdl2::image::InitFlag::JPG)
         .expect("SDL2 image failed to initialize?");
 
-    let window = video_subsystem.window("stupid slideshow", DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+    let window = video_subsystem.window("stupid slideshow",
+                                        DEFAULT_WINDOW_WIDTH,
+                                        DEFAULT_WINDOW_HEIGHT)
         .position_centered()
         .resizable()
         .build()
