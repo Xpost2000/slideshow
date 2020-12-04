@@ -66,7 +66,7 @@ impl ApplicationScreenState for SelectSlideToLoadState {
 
         graphics_context.logical_resolution = VirtualResolution::Display;
         graphics_context.clear_color(Color::new(10, 10, 16, 255));
-        let heading_font_size = graphics_context.font_size_percent(0.08);
+        let heading_font_size = graphics_context.font_size_percent(0.04);
         let (width, heading_height) = graphics_context.text_dimensions(default_font, "Browse For Slide File(left arrow, for back)", heading_font_size);
         graphics_context.render_text(default_font,
                                      ((graphics_context.logical_width() as i32 / 2) - (width as i32) / 2) as f32,
@@ -89,13 +89,13 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                                      Color::new(128, 128, 128, 255),
                                      sdl2::ttf::FontStyle::NORMAL);
 
-        let mut draw_cursor_y : f32 = (heading_height*2) as f32;
-        let listings_to_show = 10;
+        let mut draw_cursor_y = (heading_height as f32 * 2.5);
+        let listings_to_show = 13;
         // TODO: refactor
         graphics_context.render_filled_rectangle((((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
                                                  draw_cursor_y-10.0,
                                                  (graphics_context.logical_width()/2) as f32,
-                                                 listings_to_show as f32 * graphics_context.font_size_percent(0.06) as f32,
+                                                 listings_to_show as f32 * graphics_context.font_size_percent(0.056) as f32,
                                                  Color::new(5, 5, 8, 255));
         let directory_listing = directory_listing.into_iter();
         for (index, path) in directory_listing.
@@ -116,9 +116,9 @@ impl ApplicationScreenState for SelectSlideToLoadState {
 
                 let font_size = graphics_context.font_size_percent(
                     if is_selected {
-                        0.053
+                        0.051
                     } else {
-                        0.045
+                        0.042
                     });
                 let height = graphics_context.text_dimensions(default_font, &directory_string, font_size).1;
 
@@ -140,8 +140,5 @@ impl ApplicationScreenState for SelectSlideToLoadState {
     fn update(&self,
               app: &mut ApplicationState,
               delta_time: f32) {
-        if let None = &app.slideshow {
-            app.state = ApplicationScreen::InvalidOrNoSlide(InvalidOrNoSlideState);
-        }
     }
 }

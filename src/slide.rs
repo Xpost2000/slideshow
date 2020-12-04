@@ -255,12 +255,14 @@ impl Slide {
                             page: usize) {
         graphics_context.logical_resolution = VirtualResolution::Virtual(self.resolution().0,
                                                                          self.resolution().1);
-        graphics_context.use_viewport_letterbox();
 
         if let Some(selected_page) = self.get(page) {
+            graphics_context.use_viewport_letterbox();
             selected_page.render(graphics_context, default_font);
         } else {
             graphics_context.clear_color(Color::new(10, 10, 16, 255));
+            graphics_context.use_viewport_default();
+
             graphics_context.logical_resolution = VirtualResolution::Display;
             graphics_context.render_text_justified(default_font,
                                                    TextBounds::EntireScreen,

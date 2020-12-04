@@ -67,9 +67,11 @@ pub fn load_file(file_name: &str) -> Result<String, &'static str> {
     match File::open(file_name) {
         Ok(mut slide_file) => {
             let mut result = String::new();
-            slide_file.read_to_string(&mut result)
-                .expect("Unable to read into string");
-            Ok(result)
+
+            match slide_file.read_to_string(&mut result) {
+                Ok(_) => Ok(result),
+                Err(_) => Err("Did you try to throw a binary file?"),
+            }
         },
         Err(_) => {
             Err("Bad file")

@@ -82,5 +82,8 @@ impl ApplicationScreenState for ShowingSlideState {
     fn update(&self,
               app: &mut ApplicationState,
               delta_time: f32) {
+        if let None = &app.slideshow {
+            app.state = ApplicationScreen::InvalidOrNoSlide(InvalidOrNoSlideState);
+        }
     }
 }
