@@ -128,10 +128,18 @@ pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> 
 
     for line in page_lines {
         if let Some(commands) = parse_slide_command(&line) {
-            for command in commands {
-                handle_command_with_page(context, command, &mut new_page);
-                {
-                    new_page.background_color = context.current_background_color;
+            match commands[0].name {
+                "transition" => {
+                    let cmd = parse_single_command(commands[0].clone());
+                    if let Command::SetTransition(transition) = cmd.unwrap() {
+                        new_page.transition = Some(transition);
+                    }
+                },
+                _ => {
+                    for command in commands {
+                        handle_command_with_page(context, command, &mut new_page);
+                        new_page.background_color = context.current_background_color;
+                    }
                 }
             }
         } else {
@@ -473,12 +481,6 @@ pub fn compile_slide(slide_source : &String) -> Slide {
                         let cmd = parse_single_command(commands[0].clone());
                         if let Command::SetVirtualResolution(w, h) = cmd.unwrap() {
                             slide.resolution = (w, h);
-                        }
-                    },
-                    "transition" => {
-                        let cmd = parse_single_command(commands[0].clone());
-                        if let Command::SetTransition(transition) = cmd.unwrap() {
-                            slide.transition = Some(transition);
                         }
                     },
                     _ => {

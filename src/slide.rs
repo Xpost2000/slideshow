@@ -30,8 +30,36 @@ pub enum SlideElement {
     Image(ImageElement),
 }
 
+#[derive(Debug,Copy,Clone)]
+pub enum SlideTransitionType {
+    HorizontalSlide,
+    VerticalSlide,
+    FadeTo(Color),
+}
+
+#[derive(Debug, Clone)]
+pub struct SlideTransition {
+    pub transition_type: SlideTransitionType, // type is keyword :(
+    pub easing_function: EasingFunction,
+    pub time: f32,
+    pub finish_time: f32,
+}
+impl SlideTransition {
+    pub fn finished_fraction(&self) -> f32 {
+        self.time / self.finish_time
+    }
+    pub fn finished_transition(&self) -> bool {
+        self.time >= self.finish_time
+    }
+    pub fn easing_amount(&self) -> f32 {
+        self.easing_function.evaluate(0.0, 1.0, self.time/self.finish_time)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Page {
+    pub transition : Option<SlideTransition>,
+
     pub background_color: Color,
     pub elements: Vec<SlideElement>,
 }
@@ -174,37 +202,13 @@ impl Page {
 impl Default for Page {
     fn default() -> Page {
         Page {
+            transition: None,
             background_color: COLOR_WHITE,
             elements: Vec::new()
         }
     }
 }
 
-#[derive(Debug,Copy,Clone)]
-pub enum SlideTransitionType {
-    HorizontalSlide,
-    VerticalSlide,
-    FadeTo(Color),
-}
-
-#[derive(Debug, Clone)]
-pub struct SlideTransition {
-    pub transition_type: SlideTransitionType, // type is keyword :(
-    pub easing_function: EasingFunction,
-    pub time: f32,
-    pub finish_time: f32,
-}
-impl SlideTransition {
-    pub fn finished_fraction(&self) -> f32 {
-        self.time / self.finish_time
-    }
-    pub fn finished_transition(&self) -> bool {
-        self.time >= self.finish_time
-    }
-    pub fn easing_amount(&self) -> f32 {
-        self.easing_function.evaluate(0.0, 1.0, self.time/self.finish_time)
-    }
-}
 pub struct Slide {
     pub file_name : String, // owned string for hot reloading.
     pub last_modified_time: std::time::SystemTime,
@@ -212,7 +216,6 @@ pub struct Slide {
     pub pages : Vec<Page>,
     pub current_page : isize,
 
-    pub transition : Option<SlideTransition>,
     pub resolution : (u32, u32),
 }
 impl Default for Slide {
@@ -220,7 +223,6 @@ impl Default for Slide {
         Slide {
             file_name: String::new(),
             pages: Vec::new(),
-            transition: None,
             current_page: isize::default(),
             last_modified_time: std::time::SystemTime::now(),// eh...
             resolution: (1280, 720),
@@ -302,8 +304,10 @@ impl Slide {
     }
 
     pub fn finish_transition(&mut self) {
-        if let Some(transition) = &mut self.transition {
-            transition.time = 0.0;
+        if let Some(current_page) = &mut self.get_current_page() {
+            if let Some(transition) = &mut self.get_current_page_mut().unwrap().transition {
+                transition.time = 0.0;
+            }
         }
     }
 
@@ -317,12 +321,19 @@ impl Slide {
     pub fn current_page(&self) -> isize {
         self.current_page
     }
+
     pub fn get_current_page(&self) -> Option<&Page> {
         self.get(self.current_page as usize)
     }
-
     pub fn get(&self, index: usize) -> Option<&Page> {
         self.pages.get(index)
+    }
+
+    pub fn get_current_page_mut(&mut self) -> Option<&mut Page> {
+        self.get_mut(self.current_page as usize)
+    }
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Page> {
+        self.pages.get_mut(index)
     }
 
     pub fn next_page(&mut self) -> isize {
