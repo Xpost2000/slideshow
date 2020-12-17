@@ -32,7 +32,8 @@ impl ApplicationScreenState for ChangePageState {
         graphics_context.clear_color(Color::new(255, 0, 0, 255));
         let slideshow = &app.slideshow.as_ref().unwrap();
 
-        if let Some(transition) = &slideshow.get_current_page().unwrap().transition {
+        let page_with_transition = &slideshow.get(self.from as usize);
+        if let Some(transition) = &page_with_transition.unwrap().transition {
             let easing_amount = transition.easing_amount();
             let forward_direction = second > first;
             let sign = if forward_direction { 1.0 } else { -1.0 };
@@ -98,9 +99,10 @@ impl ApplicationScreenState for ChangePageState {
         let second = self.to;
         if let Some(slideshow) = &mut app.slideshow {
             let valid_transition = slideshow.get(first as usize).is_some() && slideshow.get(second as usize).is_some();
-            if let None = slideshow.get_current_page().unwrap().transition {
+
+            if let None = slideshow.get_mut(self.from as usize).unwrap().transition {
                 app.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
-            } else if let Some(transition) = &mut slideshow.get_current_page_mut().unwrap().transition {
+            } else if let Some(transition) = &mut slideshow.get_mut(self.from as usize).unwrap().transition {
                 if valid_transition && !transition.finished_transition() {
                     transition.time += delta_time;
                 } else {
