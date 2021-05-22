@@ -237,14 +237,18 @@ impl Slide {
             Ok(file_source) => {
                 use crate::slide_parser::compile_slide;
                 let slideshow_source = remove_comments_from_source(&file_source);
-                let new_slide = Slide {
-                    file_name: file_name.to_owned(),
-                    current_page: 0,
-                    last_modified_time: file_last_modified_time(file_name),
-                    .. compile_slide(&slideshow_source)
-                };
+                let compiled_slide = compile_slide(&slideshow_source);
 
-                Some(new_slide)
+                if let Ok(slide) = compiled_slide {
+                    Some(Slide {
+                            file_name: file_name.to_owned(),
+                            current_page: 0,
+                            last_modified_time: file_last_modified_time(file_name),
+                            .. slide
+                        })
+                } else {
+                    None
+                }
             },
             Err(_) => {
                 None

@@ -69,7 +69,7 @@ pub enum Command <'a> {
 }
 
 // TODO!
-pub fn execute_command(context: &mut SlideSettingsContext, command: Command) {
+pub fn execute_command(context: &mut SlideSettingsContext, command: Command) -> Result<(), &'static str> {
     match command {
         Command::SetColor(color) => {context.current_element_color = color;},
         Command::SetBackgroundColor(color) => {context.current_background_color = color;},
@@ -79,11 +79,16 @@ pub fn execute_command(context: &mut SlideSettingsContext, command: Command) {
         Command::ResetPosition => {context.set_position(None, None);}
         Command::ResetFont => {context.current_font_path = None;},
         Command::SetPosition(x, y) => {context.set_position(x,y);},
-        _ => { println!("{:?} is an unknown command or not handled here", command); }
+        _ => {
+            // return Err(format!("{:?} is an unknown command or not handled here", command));
+            return Err("Unknown command found.");
+        }
     }
+
+    Ok(())
 }
 
-pub fn execute_command_on_page(context: &mut SlideSettingsContext, command: Command, page: &mut Page) {
+pub fn execute_command_on_page(context: &mut SlideSettingsContext, command: Command, page: &mut Page) -> Result<(), &'static str> {
     match command {
         Command::InsertImage(background, path, width, height) => {
             page.elements.push(
@@ -100,25 +105,35 @@ pub fn execute_command_on_page(context: &mut SlideSettingsContext, command: Comm
                 )
             );
         },
-        _ => { execute_command(context, command); }
+        _ => { execute_command(context, command)?; }
     }
+
+    Ok(())
 }
 
 // This will call parse command and execute command
-pub fn handle_command(context: &mut SlideSettingsContext, command: SlideLineCommand) {
+pub fn handle_command(context: &mut SlideSettingsContext, command: SlideLineCommand) -> Result<(), &'static str> {
     let command = parse_single_command(command);
-    if let Some(command) = command {
-        execute_command(context, command);
+    if let Ok(command) = command {
+        execute_command(context, command)?;
+    } else {
+        return Err("Was not able to parse command?");
     }
+
+    Ok(())
 }
 
 pub fn handle_command_with_page(context: &mut SlideSettingsContext,
                                 command: SlideLineCommand,
-                                page: &mut Page) {
+                                page: &mut Page) -> Result<(), &'static str> {
     let command = parse_single_command(command);
-    if let Some(command) = command {
-        execute_command_on_page(context, command, page);
+    if let Ok(command) = command {
+        execute_command_on_page(context, command, page)?;
+    } else {
+        return Err("Was not able to parse command?");
     }
+
+    Ok(())
 }
 
 pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page {
@@ -183,13 +198,13 @@ FIXME
 */
 // Tokenizes a command into a real command.
 // TODO!
-pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command<'a>> {
+pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Result<Command<'a>, &'static str> {
     use std::convert::TryFrom;
     let mut args = command.args.iter();
 
     match command.name {
         "reset-position" => {
-            Some(Command::ResetPosition)
+            Ok(Command::ResetPosition)
         },
         "image" | "bkimage" => {
             if let Some(image_resource_path) = args.next() {
@@ -229,12 +244,12 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
                     }
                 };
 
-                Some(Command::InsertImage(is_non_interfering,
+                Ok(Command::InsertImage(is_non_interfering,
                                           image_resource_path,
                                           width,
                                           height))
             } else {
-                None
+                Err("No image path for img?")
             }
         },
         "set-position" => {
@@ -254,36 +269,36 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
                 }
             };
 
-            Some(Command::SetPosition(x, y))
+            Ok(Command::SetPosition(x, y))
         },
         "color" | "background_color" => {
             if let Some(next) = &args.next() {
                 let color = Color::try_from(**next).unwrap_or(COLOR_BLACK);
-                Some(if command.name == "color" { Command::SetColor(color) }
-                     else { Command::SetBackgroundColor(color) })
+                Ok(if command.name == "color" { Command::SetColor(color) }
+                   else { Command::SetBackgroundColor(color) })
             } else {
-                None
+                Err("No color string specified!")
             }
         },
         "font" => {
-            if let Some(next) = &args.next() {
-                Some(Command::SetFont(next))
+            Ok(if let Some(next) = &args.next() {
+                Command::SetFont(next)
             } else {
-                Some(Command::ResetFont)
-            }
+                Command::ResetFont
+            })
         },
         "font-size" => {
             if let Some(next) = &args.next() {
                 match next.parse::<u16>() {
-                    Ok(value) => { Some(Command::SetFontSize(value)) },
-                    Err(_) => None
+                    Ok(value) => Ok(Command::SetFontSize(value)),
+                    Err(_) => Err("Invalid number specified for font-size.")
                 }
             } else {
-                None
+                Err("No font size specified?")
             }
         }
         "reset-font" => {
-            Some(Command::ResetFont)
+            Ok(Command::ResetFont)
         },
         "resolution" => {
             let width =
@@ -294,7 +309,7 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
                 args.next()
                 .unwrap_or(&"720")
                 .parse::<u32>().unwrap_or(720);
-            Some(Command::SetVirtualResolution(width, height))
+            Ok(Command::SetVirtualResolution(width, height))
         },
         "transition" => {
             // I don't actually do any detailed checking...
@@ -327,7 +342,7 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
                 .unwrap_or(&"1.0")
                 .parse::<f32>()
                 .unwrap_or(1.0);
-            Some(Command::SetTransition(
+            Ok(Command::SetTransition(
                 SlideTransition {
                     transition_type: type_of_transition,
                     easing_function: easing_function_type,
@@ -336,7 +351,7 @@ pub fn parse_single_command<'a>(command: SlideLineCommand<'a>) -> Option<Command
                 }
             ))
         },
-        _ => { None },
+        _ => { Err("Unknown command name?") },
     }
 }
 
@@ -454,7 +469,7 @@ pub fn parse_slide_command(line : &str) -> Option<Vec<SlideLineCommand>> {
     }
 }
 
-pub fn compile_slide(slide_source : &String) -> Slide {
+pub fn compile_slide(slide_source : &String) -> Result<Slide, &'static str> {
     let mut slide = Slide::default();
     let mut pages = Vec::new();
     let mut current_context = SlideSettingsContext::default();
@@ -474,13 +489,15 @@ pub fn compile_slide(slide_source : &String) -> Slide {
                             let new_page = parse_page(&mut current_context, page_source_lines[index..end_page_index].to_vec());
                             pages.push(new_page);
                         } else {
-                            println!("Error! EOF before an end page!");
+                            return Err("EOF before an end page!");
                         }
                     },
                     "resolution" => {
                         let cmd = parse_single_command(commands[0].clone());
                         if let Command::SetVirtualResolution(w, h) = cmd.unwrap() {
                             slide.resolution = (w, h);
+                        } else {
+                            return Err("Unable to parse set virtual resolution command");
                         }
                     },
                     _ => {
@@ -499,5 +516,5 @@ pub fn compile_slide(slide_source : &String) -> Slide {
     }
 
     slide.pages = pages;
-    slide
+    Ok(slide)
 }
