@@ -125,7 +125,7 @@ impl Page {
                                                                         text_content,
                                                                         font_size,
                                                                         text.color,
-                                                                        markup.get_text_drawing_style());
+                                                                        markup.get_text_drawing_style()) / graphics_context.camera.scale;
                         // render decoration
                         match markup {
                             Markup::Strikethrough(_) => {
@@ -144,8 +144,9 @@ impl Page {
                             }
                             _ => {},
                         }
-                        cursor_x += width as f32;
+                        cursor_x += (width) as f32;
                     }
+
                     cursor_y += height as f32;
                     last_font_size = font_size;
                     cursor_x = cursor_x_baseline;
