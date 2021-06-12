@@ -8,7 +8,7 @@ certain parts of this.
 
 It does the following:
   - Multiple Pages
-  - Basic Styling (Fonts, Small Markup, Color, Arbituary Positioning)
+  - Basic Styling (Fonts, Small Markup, Color, Arbitrary Positioning)
   - Resolution Independence
   - Image drawing
   - Slide transitions.
