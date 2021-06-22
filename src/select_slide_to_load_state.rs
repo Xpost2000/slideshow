@@ -11,8 +11,13 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                                                   0, directory_listing.into_iter().count()-1);
         for event in event_pump.poll_iter() {
             match event {
-                SDLEvent::DropFile {..} => {
-                    println!("? drop file event");
+                SDLEvent::DropFile { filename, .. } => {
+                    graphics_context.clear_resources();
+
+                    let new_slide = Slide::new_from_file(&filename);
+                    app.slideshow = new_slide;
+
+                    app.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                 },
                 SDLEvent::Quit {..} => {
                     app.state = ApplicationScreen::Quit(QuitState);
@@ -57,7 +62,12 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
                     app.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
                 },
-                _ => {}
+                _ => {
+                    #[cfg(debug_assertions)]
+                    {
+                        println!("Unhandled event type: {:#?}", event);
+                    }
+                }
             }
         }
     }

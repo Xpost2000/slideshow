@@ -8,6 +8,14 @@ impl ApplicationScreenState for ShowingSlideState {
                     delta_time: f32) {
         for event in event_pump.poll_iter() {
             match event {
+                SDLEvent::DropFile { filename, .. } => {
+                    graphics_context.clear_resources();
+
+                    let new_slide = Slide::new_from_file(&filename);
+                    app.slideshow = new_slide;
+
+                    app.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
+                },
                 SDLEvent::Quit {..} => {
                     app.state = ApplicationScreen::Quit(QuitState);
                 },

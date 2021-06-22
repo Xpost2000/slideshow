@@ -8,6 +8,14 @@ impl ApplicationScreenState for InvalidOrNoSlideState {
                     delta_time: f32) {
         for event in event_pump.poll_iter() {
             match event {
+                SDLEvent::DropFile { filename, .. } => {
+                    graphics_context.clear_resources();
+
+                    let new_slide = Slide::new_from_file(&filename);
+                    app.slideshow = new_slide;
+
+                    app.state = ApplicationScreen::ShowingSlide(ShowingSlideState);
+                },
                 SDLEvent::Quit {..} => {
                     app.state = ApplicationScreen::Quit(QuitState);
                 },
@@ -20,7 +28,12 @@ impl ApplicationScreenState for InvalidOrNoSlideState {
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::L), .. } => {
                     app.state = ApplicationScreen::SelectSlideToLoad(SelectSlideToLoadState);
                 },
-                _ => {}
+                _ => {
+                    #[cfg(debug_assertions)]
+                    {
+                        println!("Unhandled event type: {:#?}", event);
+                    }
+                }
             }
         }
     }
