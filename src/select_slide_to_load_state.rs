@@ -11,6 +11,9 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                                                   0, directory_listing.into_iter().count()-1);
         for event in event_pump.poll_iter() {
             match event {
+                SDLEvent::DropFile {..} => {
+                    println!("? drop file event");
+                },
                 SDLEvent::Quit {..} => {
                     app.state = ApplicationScreen::Quit(QuitState);
                 },

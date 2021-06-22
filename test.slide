@@ -1,8 +1,8 @@
 ﻿# Slide Format
 $background_color:#FFFFFF
 $resolution:1280:720
-$transition:vertical_slide:cubic_ease_out:3.25
 $page
+$transition:vertical_slide:cubic_ease_out:3.25
 $color:#444444
 $font-size: 32
                                                       Jerry Presents:
@@ -33,6 +33,7 @@ _I can fly mom!_
 $end_page
 
 $page
+$transition:vertical_slide:linear:1.00
 $color:#444444
 $font-size: 80
         _Why did I make this_?

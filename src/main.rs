@@ -84,8 +84,5 @@ fn main() {
 
         let end_time = sdl2_timer.ticks();
         delta_time = end_time - start_time;
-
-        #[cfg(debug_assertions)]
-        {println!("{}", 1.0/(delta_time as f32/1000.0));}
     }
 }

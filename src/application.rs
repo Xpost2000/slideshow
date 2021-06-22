@@ -5,7 +5,7 @@ pub use crate::application_states::*;
 
 const DEFAULT_LAST_WRITE_TIMER_INTERVAL : f32 = 0.20;
 
-const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
+const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "./";
 
 pub struct ApplicationState {
     pub state: ApplicationScreen,
