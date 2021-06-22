@@ -298,12 +298,12 @@ $color:#555555
               Any Questions?
 $end_page
 
-#$page
-#$font-size: 72
-#$color:#555555
-#$font:"data/fonts/inconsolata/Inconsolata-Regular.ttf" 
-#Testing Inconsolata!
-#$reset-font
-#
-#We should back at Baskerville!
-#$end_page
+$page
+$font-size: 72
+$color:#555555
+$font:"data/fonts/inconsolata/Inconsolata-Regular.ttf" 
+Testing Inconsolata!
+$reset-font
+
+We should back at Baskerville!
+$end_page
