@@ -58,19 +58,11 @@ impl<'a> MarkupLexer<'a> {
     // It "renders" the text into a string. It removes all markup characters
     // and returns plain text.
     pub fn stitch(self) -> String {
-        let mut result = String::new();
-        for item in self {
-            match item {
-                Markup::Plain(text_content) |
-                Markup::Bold(text_content) |
-                Markup::Strikethrough(text_content) |
-                Markup::Italics(text_content) |
-                Markup::Underlined(text_content) => {
-                    result.push_str(&text_content);
-                }
-            }
-        }
-        result
+        self.fold(String::new(),
+                  |mut accumulated_string, markup| {
+                      accumulated_string.push_str(&markup.get_text_content());
+                      accumulated_string
+                  })
     }
 
     fn is_special_character(c: char) -> bool {
