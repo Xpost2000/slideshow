@@ -152,46 +152,47 @@ impl Page {
                     cursor_x = cursor_x_baseline;
                 },
                 SlideElement::Image(image) => {
-                    let texture = graphics_context.add_image(&image.location);
-                    let image_dimensions = graphics_context.image_dimensions(texture);
+                    if let Ok(texture) = graphics_context.add_image(&image.location) {
+                        let image_dimensions = graphics_context.image_dimensions(texture).unwrap_or((0, 0));
 
-                    if let Some(baseline_y) = image.y {
-                        if cursor_y_baseline.is_none() {
-                            cursor_y_baseline = Some(baseline_y);
-                            cursor_y = cursor_y_baseline.unwrap();
-                        } else {
-                            if baseline_y != cursor_y_baseline.unwrap() {
+                        if let Some(baseline_y) = image.y {
+                            if cursor_y_baseline.is_none() {
                                 cursor_y_baseline = Some(baseline_y);
                                 cursor_y = cursor_y_baseline.unwrap();
+                            } else {
+                                if baseline_y != cursor_y_baseline.unwrap() {
+                                    cursor_y_baseline = Some(baseline_y);
+                                    cursor_y = cursor_y_baseline.unwrap();
+                                }
                             }
                         }
-                    }
 
-                    if let Some(x) = image.x {
-                        cursor_x = x;
-                    }
+                        if let Some(x) = image.x {
+                            cursor_x = x;
+                        }
 
-                    let image_width = match image.w {
-                        Some(w) => w,
-                        None => image_dimensions.0 as f32,
-                    };
-                    let image_height = match image.h {
-                        Some(h) => h,
-                        None => image_dimensions.1 as f32,
-                    };
-                    graphics_context.render_image(texture,
-                                                  cursor_x,
-                                                  cursor_y,
-                                                  image_width,
-                                                  image_height,
-                                                  image.color);
+                        let image_width = match image.w {
+                            Some(w) => w,
+                            None => image_dimensions.0 as f32,
+                        };
+                        let image_height = match image.h {
+                            Some(h) => h,
+                            None => image_dimensions.1 as f32,
+                        };
+                        graphics_context.render_image(texture,
+                                                      cursor_x,
+                                                      cursor_y,
+                                                      image_width,
+                                                      image_height,
+                                                      image.color);
 
-                    if !image.background {
-                        cursor_y +=
-                            match image.y {
-                                None => image_height,
-                                Some(y) => y,
-                            };
+                        if !image.background {
+                            cursor_y +=
+                                match image.y {
+                                    None => image_height,
+                                    Some(y) => y,
+                                };
+                        }
                     }
                 },
                 _ => unimplemented!("????")

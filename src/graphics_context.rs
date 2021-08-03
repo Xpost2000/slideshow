@@ -108,17 +108,24 @@ impl SDL2ImageTextureAssets {
         self.images.get_mut(id)
     }
 
-    fn insert(&mut self, path: &str) {
+    fn insert<'a>(&mut self, path: &'a str) -> Result<&'a str, &'static str> {
         use sdl2::image::LoadSurface;
 
         if !self.images.contains_key(path) {
-            let surface_image = sdl2::surface::Surface::from_file(path).unwrap();
-            self.images.insert(path.to_owned(),
-                               SDL2ImageTextureAsset{
-                                   texture: {
-                                       self.texture_creator.create_texture_from_surface(surface_image).unwrap()
-                                   }
-                               });
+            let surface_image = sdl2::surface::Surface::from_file(path);
+
+            if let Ok(surface_image) = surface_image {
+                self.images.insert(path.to_owned(),
+                                   SDL2ImageTextureAsset{
+                                       texture: {
+                                           self.texture_creator.create_texture_from_surface(surface_image).unwrap()
+                                       }
+                                   });
+            }
+
+            Ok(path)
+        } else {
+            Err("Image couldn't be loaded?")
         }
     }
 }
@@ -270,10 +277,11 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         resolutions
     }
 
-    pub fn add_image<'a>(&mut self, image_file_name: &'a str) -> &'a str {
-        self.image_assets.insert(image_file_name);
-        image_file_name
+    pub fn add_image<'a>(&mut self, image_file_name: &'a str) -> Result<&'a str, &'static str>{
+        self.image_assets.insert(image_file_name)
     }
+
+    // TODO(jerry): Fallback font?
     pub fn add_font<'a>(&mut self, font_name: &'a str) -> &'a str {
         if !self.font_assets.contains_key(font_name) {
             self.font_assets.insert(font_name.to_owned(),
@@ -419,8 +427,12 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     }
 
     // Please check for whether this image actually exists for real.
-    pub fn image_dimensions(&self, texture_image: &str) -> (u32, u32) {
-        self.get_image_asset(texture_image).unwrap().dimensions()
+    pub fn image_dimensions(&self, texture_image: &str) -> Option<(u32, u32)> {
+        if let Some(texture_image) = self.get_image_asset(texture_image) {
+            Some(texture_image.dimensions())
+        } else {
+            None
+        }
     }
 
     pub fn render_image(&mut self, image_id: &str, x: f32, y: f32, w: f32, h: f32, color: Color) {
