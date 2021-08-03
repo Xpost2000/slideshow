@@ -102,14 +102,20 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                                      Color::new(128, 128, 128, 255),
                                      sdl2::ttf::FontStyle::NORMAL);
 
-        let mut draw_cursor_y = (heading_height as f32 * 2.5);
-        let listings_to_show = 13;
+        let width_of_rectangle = (graphics_context.logical_width()/2) as f32;
+
+        let draw_cursor_x      = (graphics_context.logical_width() as f32 / 2.0) - (width_of_rectangle / 2.0);
+        let mut draw_cursor_y  = (heading_height as f32 * 2.5);
+
+        let listings_to_show   = 13;
         // TODO: refactor
-        graphics_context.render_filled_rectangle((((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
-                                                 draw_cursor_y-10.0,
-                                                 (graphics_context.logical_width()/2) as f32,
-                                                 listings_to_show as f32 * graphics_context.font_size_percent(0.056) as f32,
-                                                 Color::new(5, 5, 8, 255));
+        {
+            graphics_context.render_filled_rectangle(draw_cursor_x,
+                                                     draw_cursor_y-10.0,
+                                                     width_of_rectangle,
+                                                     listings_to_show as f32 * graphics_context.font_size_percent(0.056) as f32,
+                                                     Color::new(5, 5, 8, 255));
+        }
         let directory_listing = directory_listing.into_iter();
         for (index, path) in directory_listing.
             skip(app.currently_selected_directory)
@@ -136,7 +142,7 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                 let height = graphics_context.text_dimensions(default_font, &directory_string, font_size).1;
 
                 graphics_context.render_text(default_font,
-                                             (((graphics_context.logical_width() as i32 / 2)) - 250) as f32,
+                                             draw_cursor_x,
                                              draw_cursor_y,
                                              &directory_string,
                                              font_size,

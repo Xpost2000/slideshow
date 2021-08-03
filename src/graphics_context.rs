@@ -4,7 +4,11 @@
 
    It will be the same thing as draw_text, but it will save it to a cache with a hashmap.
 
-TODO: Clear text cache.
+    TODO: Clear text cache.
+
+    NOTE(jerry): 8/3/2021
+    I'm going to disable DPI scaling as this program works with a fixed defined resolution
+    so there's no reason to use DPI as I'm already resolution independent.
 */
 extern crate sdl2;
 
@@ -188,7 +192,6 @@ pub struct SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     pub logical_resolution : VirtualResolution,
 }
 
-const DEFAULT_DPI : f32 = 96.0;
 // lots of interface and safety changes to be made.
 impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
     // this is technically an associated function
@@ -246,6 +249,9 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         self.window_canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
     }
 
+    // This is not needed in the first place because my renderer was
+    // already resolution independent.
+    #[cfg(none)]
     fn get_display_dpi(&self) -> (f32, f32, f32) {
         self.video_subsystem.display_dpi(0).unwrap()
     }
@@ -392,7 +398,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
     pub fn find_text_asset_by_size(&mut self, font_id: &str, font_size: u16) -> Option<&sdl2::ttf::Font<'ttf, 'static>> {
         let ttf_context = self.ttf_context;
-        let font_size : u16 = (font_size as f32 * (self.get_display_dpi().0 / DEFAULT_DPI)) as u16;
         let font_asset = self.get_font_asset_mut(font_id);
 
         if let Some(font_asset) = font_asset {
@@ -404,7 +409,6 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
 
     pub fn find_text_asset_by_size_mut(&mut self, font_id: &str, font_size: u16) -> Option<&mut sdl2::ttf::Font<'ttf, 'static>> {
         let ttf_context = self.ttf_context;
-        let font_size : u16 = (font_size as f32 * (self.get_display_dpi().0 / DEFAULT_DPI)) as u16;
         let font_asset = self.get_font_asset_mut(font_id);
 
         if let Some(font_asset) = font_asset {
