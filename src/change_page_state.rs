@@ -3,9 +3,9 @@ pub use crate::application_states::*;
 impl ApplicationScreenState for ChangePageState {
     fn handle_event(&self,
                     app: &mut ApplicationState,
-                    graphics_context: &mut SDL2GraphicsContext,
+                    _graphics_context: &mut SDL2GraphicsContext,
                     event_pump: &mut sdl2::EventPump,
-                    delta_time: f32) {
+                    _delta_time: f32) {
         for event in event_pump.poll_iter() {
             match event {
                 SDLEvent::Quit {..} => {

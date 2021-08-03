@@ -136,7 +136,7 @@ pub fn handle_command_with_page(context: &mut SlideSettingsContext,
     Ok(())
 }
 
-pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Page {
+pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> Result<Page, &'static str> {
     let mut new_page : Page = Page::default();
     context.current_line = 0;
     let mut current_line = 0;
@@ -152,7 +152,7 @@ pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> 
                 },
                 _ => {
                     for command in commands {
-                        handle_command_with_page(context, command, &mut new_page);
+                        handle_command_with_page(context, command, &mut new_page)?;
                         new_page.background_color = context.current_background_color;
                     }
                 }
@@ -189,7 +189,7 @@ pub fn parse_page(context: &mut SlideSettingsContext, page_lines: Vec<&str>) -> 
     }
 
     context.set_position(None, None);
-    new_page
+    Ok(new_page)
 }
 
 /*
@@ -483,10 +483,11 @@ pub fn compile_slide(slide_source : &String) -> Result<Slide, &'static str> {
                         let end_page_index = find_closing_command(&mut line_iterator, "end_page");
 
                         if let Some(end_page_index) = end_page_index {
-                            let index = index+1;
+                            let index          = index+1;
                             let end_page_index = end_page_index;
+
                             let page_source_lines : Vec<&str> = slide_source.lines().collect();
-                            let new_page = parse_page(&mut current_context, page_source_lines[index..end_page_index].to_vec());
+                            let new_page                      = parse_page(&mut current_context, page_source_lines[index..end_page_index].to_vec())?;
                             pages.push(new_page);
                         } else {
                             return Err("EOF before an end page!");
@@ -502,7 +503,7 @@ pub fn compile_slide(slide_source : &String) -> Result<Slide, &'static str> {
                     },
                     _ => {
                         for command in commands {
-                            handle_command(&mut current_context, command);
+                            handle_command(&mut current_context, command)?;
                         }
                     },
                 }

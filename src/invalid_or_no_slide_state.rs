@@ -5,7 +5,7 @@ impl ApplicationScreenState for InvalidOrNoSlideState {
                     app: &mut ApplicationState,
                     graphics_context: &mut SDL2GraphicsContext,
                     event_pump: &mut sdl2::EventPump,
-                    delta_time: f32) {
+                    _delta_time: f32) {
         for event in event_pump.poll_iter() {
             match event {
                 SDLEvent::DropFile { filename, .. } => {
@@ -39,7 +39,7 @@ impl ApplicationScreenState for InvalidOrNoSlideState {
     }
 
     fn draw(&self,
-            app: &ApplicationState,
+            _app: &ApplicationState,
             graphics_context: &mut SDL2GraphicsContext) {
         let default_font = graphics_context.add_font("data/fonts/libre-baskerville/LibreBaskerville-Regular.ttf");
         graphics_context.clear_color(Color::new(10, 10, 16, 255));

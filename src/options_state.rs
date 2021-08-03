@@ -5,7 +5,7 @@ impl ApplicationScreenState for OptionsState {
                     app: &mut ApplicationState,
                     graphics_context: &mut SDL2GraphicsContext,
                     event_pump: &mut sdl2::EventPump,
-                    delta_time: f32) {
+                    _delta_time: f32) {
         let resolutions = graphics_context.get_avaliable_resolutions();
         let resolution_count = resolutions.iter().count();
         app.currently_selected_resolution = clamp(app.currently_selected_resolution,

@@ -5,7 +5,7 @@ impl ApplicationScreenState for ShowingSlideState {
                     app: &mut ApplicationState,
                     graphics_context: &mut SDL2GraphicsContext,
                     event_pump: &mut sdl2::EventPump,
-                    delta_time: f32) {
+                    _delta_time: f32) {
         for event in event_pump.poll_iter() {
             match event {
                 SDLEvent::DropFile { filename, .. } => {
@@ -89,7 +89,7 @@ impl ApplicationScreenState for ShowingSlideState {
 
     fn update(&self,
               app: &mut ApplicationState,
-              delta_time: f32) {
+              _delta_time: f32) {
         if let None = &app.slideshow {
             app.state = ApplicationScreen::InvalidOrNoSlide(InvalidOrNoSlideState);
         }

@@ -9,20 +9,20 @@ pub use crate::application::*;
 
 pub trait ApplicationScreenState {
     fn handle_event(&self,
-                    app: &mut ApplicationState,
-                    graphics_context: &mut SDL2GraphicsContext,
-                    event_pump: &mut sdl2::EventPump,
-                    delta_time: f32) {
+                    _app: &mut ApplicationState,
+                    _graphics_context: &mut SDL2GraphicsContext,
+                    _event_pump: &mut sdl2::EventPump,
+                    _delta_time: f32) {
     }
 
     fn draw(&self,
-            app: &ApplicationState,
-            graphics_context: &mut SDL2GraphicsContext) {
+            _app: &ApplicationState,
+            _graphics_context: &mut SDL2GraphicsContext) {
     }
 
     fn update(&self,
-              app: &mut ApplicationState,
-              delta_time: f32) {
+              _app: &mut ApplicationState,
+              _delta_time: f32) {
     }
 }
 

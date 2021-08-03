@@ -5,7 +5,7 @@ impl ApplicationScreenState for SelectSlideToLoadState {
                     app: &mut ApplicationState,
                     graphics_context: &mut SDL2GraphicsContext,
                     event_pump: &mut sdl2::EventPump,
-                    delta_time: f32) {
+                    _delta_time: f32) {
         let directory_listing = std::fs::read_dir(&app.current_working_directory).expect("Failed to get directory listing?");
         app.currently_selected_directory = clamp(app.currently_selected_directory,
                                                   0, directory_listing.into_iter().count()-1);
@@ -105,7 +105,7 @@ impl ApplicationScreenState for SelectSlideToLoadState {
         let width_of_rectangle = (graphics_context.logical_width()/2) as f32;
 
         let draw_cursor_x      = (graphics_context.logical_width() as f32 / 2.0) - (width_of_rectangle / 2.0);
-        let mut draw_cursor_y  = (heading_height as f32 * 2.5);
+        let mut draw_cursor_y  = heading_height as f32 * 2.5;
 
         let listings_to_show   = 13;
         // TODO: refactor
@@ -157,7 +157,7 @@ impl ApplicationScreenState for SelectSlideToLoadState {
     }
 
     fn update(&self,
-              app: &mut ApplicationState,
-              delta_time: f32) {
+              _app: &mut ApplicationState,
+              _delta_time: f32) {
     }
 }

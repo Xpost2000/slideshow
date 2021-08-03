@@ -80,7 +80,7 @@ impl Page {
         let mut cursor_x : f32 = 0.0;
         let mut cursor_y : f32 = 0.0;
 
-        let mut cursor_x_baseline: f32 = 0.0;
+        let mut cursor_x_baseline: f32;
         let mut cursor_y_baseline: Option<f32> = None;
 
         for element in &self.elements {
@@ -195,7 +195,6 @@ impl Page {
                         }
                     }
                 },
-                _ => unimplemented!("????")
             }
         }
     }
@@ -310,7 +309,7 @@ impl Slide {
     }
 
     pub fn finish_transition(&mut self) {
-        if let Some(current_page) = &mut self.get_current_page() {
+        if let Some(_current_page) = &mut self.get_current_page() {
             if let Some(transition) = &mut self.get_current_page_mut().unwrap().transition {
                 transition.time = 0.0;
             }

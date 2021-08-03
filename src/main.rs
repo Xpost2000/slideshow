@@ -26,9 +26,8 @@ mod change_page_state;
 mod showing_slide_state;
 mod select_slide_to_load_state;
 
-const DEFAULT_WINDOW_WIDTH : u32 = 1280;
+const DEFAULT_WINDOW_WIDTH  : u32 = 1280;
 const DEFAULT_WINDOW_HEIGHT : u32 = 720;
-const DEFAULT_SLIDE_WHEN_NONE_GIVEN : &'static str = "test.slide";
 
 fn main() {
     let sdl2_context = sdl2::init().expect("SDL2 failed to initialize?");
