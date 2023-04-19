@@ -1,23 +1,30 @@
 # slideshow
 
-This is a small slideshow program that I made to practice doing some Rust code.
+This is a small slideshow program that I made to practice writing Rust.
 
-It wasn't meant to practice idiomatic Rust code, it was just to produce something, and
-it worked although I'm not very happy with a lot of the things I did and I've got to unC-ify
-certain parts of this.
+It is useful for producing small slideshows relatively quickly without much knowledge.
 
 It does the following:
   - Multiple Pages
   - Basic Styling (Fonts, Small Markup, Color, Arbitrary Positioning)
-  - Resolution Independence
+  - Resolution and aspect ratio independence
   - Image drawing
-  - Slide transitions.
+  - Slide transitions (4 types)
 
 It's also kind of convenient for me since I don't have Microsoft Powerpoint so I can use this to make
 basically presentable slides.
 
+## Compile / Build
 This thing depends on sdl2-rs and uses [Libre Baskerville](https://fonts.google.com/specimen/Libre+Baskerville)
 as the default font.
 
+Those files are included, and this should be buildable with
+
+```
+cargo build
+```
+
+## Usage / Running
+Running the program will lead to a blank page
 It includes a dummy slideshow that was used for testing but also demonstrates the format of the slides used.
 Lifetimes really hurt and I need to get to know them better...
