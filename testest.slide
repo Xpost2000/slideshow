@@ -1,5 +1,6 @@
 # Slide Format
-$font:"data/fonts/inconsolata/Inconsolata-Regular.ttf" 
+$resolution:1280:720
+$font:"data/fonts/Inconsolata/Inconsolata-Regular.ttf" 
 
 $page
 $background_color:#FFFFFF
@@ -36,7 +37,6 @@ $end_page
 
 $page
 $background_color:#00FF00FF
-$reset
 Hi humang?
 $color:#0000FFFF
 This should work
@@ -76,7 +76,6 @@ $end_page
 
 $page
 $background_color:#FFFFFF
-# $align:center
 $font-size: 72
 $color:#555555
 _End of presentation_
