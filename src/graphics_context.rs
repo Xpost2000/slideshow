@@ -718,14 +718,14 @@ impl<'sdl2, 'ttf, 'image> SDL2GraphicsContext<'sdl2, 'ttf, 'image> {
         let x = {
             match justification.0 {
                 TextJustificationHorizontal::Left => x,
-                TextJustificationHorizontal::Right => ((w - width as f32) + x),
+                TextJustificationHorizontal::Right => (w - width as f32) + x,
                 TextJustificationHorizontal::Center => (w / 2.0) - (width as f32 / 2.0) + x,
             }
         };
         let y = {
             match justification.1 {
                 TextJustificationVertical::Up => x,
-                TextJustificationVertical::Down => ((h - height as f32) + y),
+                TextJustificationVertical::Down => (h - height as f32) + y,
                 TextJustificationVertical::Center => (h / 2.0) - (height as f32 / 2.0) + y,
             }
         };
