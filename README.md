@@ -37,11 +37,13 @@ transitions of up to 3 types.
 Since this is a visual presentation program, the way I render stuff
 has to be pretty precise and instead of using a glyph-cache which is
 extremely common I've opted to use a text-cache. This was chosen
-because of how complex rendering text accurately is. I choose to cache
-text-lines/words instead of individual glyphs, as for instance certain
-combinations of graphemes will produce a different glyph. This is most
-commonly seen in _ligatures_, but is also present in some languages
-such as Arabic.
+because of how complex rendering text accurately is. 
+
+I chose to cache text-lines/words instead of individual glyphs as
+certain combinations of graphemes will produce different individual
+glyphs. This is most commonly seen in _ligatures_ where characters are
+commonly combined into a singular glyph for aesthetic purposes. This is
+also present in some languages such as Arabic.
 
 I recache the font if resolution changes, and cache all the text in a
 slideshow when it is rendered this ensures it always looks *crisp and
