@@ -71,9 +71,10 @@ Which I admit is way more convenient than my C projects.
 
 ## Usage / Running
 
-Running the program will lead to a blank page It includes a dummy
-slideshow that was used for testing which also demonstrates all the
-features of the markup language.
+Running the program will lead to a blank page.
 
 The page in question will look like this:
 ![Blank Page!](./media/1.png)
+
+You can load a slide by dragging it onto the program as the gifs in the '_Media_' section
+demonstrate.
