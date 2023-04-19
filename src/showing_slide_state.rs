@@ -27,18 +27,6 @@ impl ApplicationScreenState for ShowingSlideState {
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::F), ..} => {
                     graphics_context.toggle_fullscreen();
                 },
-                #[cfg(debug_assertions)]
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Num0), .. } => {
-                    graphics_context.camera.scale = 1.0;
-                },
-                #[cfg(debug_assertions)]
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Up), .. } => {
-                    graphics_context.camera.scale += 1.0 * delta_time;
-                },
-                #[cfg(debug_assertions)]
-                SDLEvent::KeyDown { keycode: Some(SDLKeycode::Down), .. } => {
-                    graphics_context.camera.scale -= 1.0 * delta_time;
-                },
                 SDLEvent::KeyDown { keycode: Some(SDLKeycode::R), .. } => {
                     if let Some(slideshow) = &mut app.slideshow {
                         graphics_context.clear_resources();
